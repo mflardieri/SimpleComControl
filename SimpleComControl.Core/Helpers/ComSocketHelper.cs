@@ -21,18 +21,22 @@ namespace SimpleComControl.Core.Helpers
         }
         public static bool TcpNetWorkInfoAvailablity(int port)
         {
-            IPGlobalProperties ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
-            TcpConnectionInformation[] tcpConnInfoArray = ipGlobalProperties.GetActiveTcpConnections();
-
-            foreach (TcpConnectionInformation tcpi in tcpConnInfoArray)
+            if (port >= 0)
             {
-                if (tcpi.LocalEndPoint.Port == port)
-                {
-                    return false;
 
+                IPGlobalProperties ipGlobalProperties = IPGlobalProperties.GetIPGlobalProperties();
+                TcpConnectionInformation[] tcpConnInfoArray = ipGlobalProperties.GetActiveTcpConnections();
+
+                foreach (TcpConnectionInformation tcpi in tcpConnInfoArray)
+                {
+                    if (tcpi.LocalEndPoint.Port == port)
+                    {
+                        return false;
+                    }
                 }
+                return true;
             }
-            return true;
+            return false;
         }
     }
 }

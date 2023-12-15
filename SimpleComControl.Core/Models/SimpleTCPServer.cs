@@ -1,12 +1,7 @@
 ﻿using SimpleComControl.Core.Bases;
 using SimpleComControl.Core.Interfaces;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
+using System.Net.Sockets;
 
 namespace SimpleComControl.Core.Models
 {
@@ -16,24 +11,27 @@ namespace SimpleComControl.Core.Models
         {
         }
 
-        public bool isRunning { get; private set; }
+        public bool IsRunning { get; private set; }
 
-        private void worker()
+        private void Worker()
         {
-            isRunning = true;
-            while (isRunning)
+            IsRunning = true;
+            while (IsRunning)
             {
-                Socket clientSocket = null;
+                Socket? clientSocket = null;
                 try
                 {
-                    clientSocket = _socket.Accept();
+                    if (_socket != null)
+                    {
+                        clientSocket = _socket.Accept();
+                    }
                 }
                 catch { }
                 if (clientSocket != null)
                 {
                     var th = new Thread(() =>
                     {
-                        while (isRunning && clientSocket.Connected)
+                        while (IsRunning && clientSocket.Connected)
                         {
                             try
                             {
@@ -41,6 +39,7 @@ namespace SimpleComControl.Core.Models
                             }
                             catch (Exception ex)
                             {
+                                Console.WriteLine(ex.ToString());
                             }
 
                         }
@@ -51,34 +50,38 @@ namespace SimpleComControl.Core.Models
         }
         public void Start(string address, int port)
         {
-            if (isRunning) { throw new Exception("Server is already started"); }
+            if (IsRunning) { throw new Exception("Server is already started"); }
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             //_socket.SetS ocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
             //_socket.Connect(IPAddress.Parse(address), port);
             _socket.Bind(new IPEndPoint(IPAddress.Parse(address), port));
             _socket.Listen(10);
 
-            if (_socket.IsBound && !isRunning)
+            if (_socket.IsBound && !IsRunning)
             {
                 Console.WriteLine($"Com TCP Server listening on port: {port}...");
-                var workerTh = new Thread(() => { worker(); });
+                var workerTh = new Thread(() => { Worker(); });
                 workerTh.Start();
-                isRunning = true;
+                IsRunning = true;
             }
         }
         public void Stop()
         {
-            isRunning = false;
-            try
+            IsRunning = false;
+            if (_socket != null)
             {
-                _socket.Shutdown(SocketShutdown.Both);
+                try
+                {
+                    _socket.Shutdown(SocketShutdown.Both);
+                }
+                catch { }
+                try { _socket.Close(); } catch { }
             }
-            catch { }
-            try { _socket.Close(); } catch { }
         }
         public void Dispose()
         {
             Stop();
+            GC.SuppressFinalize(this);
         }
     }
 }

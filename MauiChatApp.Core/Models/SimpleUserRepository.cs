@@ -9,7 +9,7 @@ namespace MauiChatApp.Core.Models
             public string Name { get; set; }
             public string UserId { get; set; }
         }
-        private static List<SimpleUser> _users = new List<SimpleUser>();
+        private static List<SimpleUser> _users = new();
         public List<IUserDef> GetUsers(Func<IUserDef, bool> exp = null)
         {
             SeedUsers();
@@ -21,9 +21,10 @@ namespace MauiChatApp.Core.Models
         }
 
 
-        public void SeedUsers()
+        private static void SeedUsers()
         {
-            if (_users == null) { _users = new List<SimpleUser>();  }
+            _users ??= new List<SimpleUser>();
+
             if (_users.Count == 0) 
             {
                 _users.Add(new SimpleUser() { Name = "Kirk", UserId = "1" });

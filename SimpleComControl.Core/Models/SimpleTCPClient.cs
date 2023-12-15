@@ -1,11 +1,6 @@
 ﻿using SimpleComControl.Core.Bases;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
+using System.Net.Sockets;
 
 namespace SimpleComControl.Core.Models
 {
@@ -14,11 +9,11 @@ namespace SimpleComControl.Core.Models
         public SimpleTCPClient() : base(new SimpleComMessageHandler())
         {
         }
-        public bool isRunning { get; private set; }
-        private void worker()
+        public bool IsRunning { get; private set; }
+        private void Worker()
         {
-            isRunning = true;
-            while (isRunning)
+            IsRunning = true;
+            while (IsRunning)
             {
                 if (_socket.Connected)
                 {
@@ -37,17 +32,17 @@ namespace SimpleComControl.Core.Models
             _socket.Bind(new IPEndPoint(IPAddress.Parse(address), port));
             _socket.Connect(IPAddress.Parse(serverAddress), serverPort);
 
-            if (_socket.Connected && !isRunning)
+            if (_socket.Connected && !IsRunning)
             {
                 Console.WriteLine($"Client running on port: {port}...");
-                var workerTh = new Thread(() => { worker(); });
+                var workerTh = new Thread(() => { Worker(); });
                 workerTh.Start();
-                isRunning = true;
+                IsRunning = true;
             }
         }
         public void Stop()
         {
-            isRunning = false;
+            IsRunning = false;
             try
             {
                 _socket.Shutdown(SocketShutdown.Both);

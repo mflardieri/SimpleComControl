@@ -7,10 +7,10 @@ namespace MauiChatApp.Core.Tests
         [TestMethod]
         public void TestGetUsers()
         {
-            SimpleUserRepository repo = new SimpleUserRepository();
-            var users =  repo.GetUsers(x => x.Name != "");
+            SimpleUserRepository repo = new();
+            var users = repo.GetUsers(x => x.Name != "");
             Assert.IsNotNull(users);
-            Assert.IsTrue(users.Count() > 0);
+            Assert.IsTrue(users.Count > 0);
         }
     }
 }

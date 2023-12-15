@@ -1,5 +1,4 @@
 ﻿using MauiChatApp.Core.Interfaces;
-using System.Net.NetworkInformation;
 
 namespace MauiChatApp.Core.Models
 {
@@ -18,7 +17,7 @@ namespace MauiChatApp.Core.Models
             public int MaxUsers { get; set; }
         }
 
-        private static List<SimpleRoom> _rooms = new List<SimpleRoom>();
+        private static List<SimpleRoom> _rooms = new ();
 
         public List<IRoomDef> GetRooms(Func<IRoomDef, bool> exp = null)
         {
@@ -31,9 +30,9 @@ namespace MauiChatApp.Core.Models
             return q.ToList();
         }
 
-        private void SeedRooms() 
+        private static void SeedRooms() 
         {
-            if (_rooms == null) { _rooms = new List<SimpleRoom>(); }
+            _rooms ??= new List<SimpleRoom>();
             if (_rooms.Count == 0) 
             {
                 _rooms.Add(new SimpleRoom() {  MaxUsers = 100, Name = "Main", RoomId = "0", Topic ="Welcome!!!" });

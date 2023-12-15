@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace SimpleComControl.Core.Interfaces
+﻿namespace SimpleComControl.Core.Interfaces
 {
     public interface IComIdentity
     {
@@ -13,6 +7,6 @@ namespace SimpleComControl.Core.Interfaces
         public string GetIdentityStatus();
         public string GetIdentityType();
 
-        public IComIdentity GetSubIdentity();
+        public List<IComIdentity> GetSubIdentities();
     }
 }

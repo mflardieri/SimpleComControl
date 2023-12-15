@@ -8,10 +8,10 @@ namespace MauiChatApp.Core.Tests
         [TestMethod]
         public void TestGetRooms() 
         {
-            SimpleRoomRepository repo = new SimpleRoomRepository();
+            SimpleRoomRepository repo = new();
             var rooms = repo.GetRooms(x => x.Name !="");
             Assert.IsNotNull(rooms);
-            Assert.IsTrue(rooms.Count() > 0);
+            Assert.IsTrue(rooms.Count > 0);
         }
     }
 }

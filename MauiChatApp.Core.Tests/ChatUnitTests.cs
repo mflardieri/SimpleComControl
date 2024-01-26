@@ -1,6 +1,8 @@
-﻿using MauiChatApp.Core.Models;
+﻿using MauiChatApp.Core.Interfaces;
+using MauiChatApp.Core.Models;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Adapter;
 using SimpleComControl.Core.Helpers;
+using SimpleComControl.Core.Interfaces;
 using System.Text;
 
 namespace MauiChatApp.Core.Tests
@@ -17,6 +19,10 @@ namespace MauiChatApp.Core.Tests
         private int ClientPort { get; set; }
         private ChatSocket? Client { get; set; }
 
+        private int Client2Port { get; set; }
+        private ChatSocket? Client2 { get; set; }
+        private IUserRepository? UserRepository { get; set; }
+        private List<IUserDef>? Users { get; set; }
 
         [TestMethod]
         public void TestPacketConverter()
@@ -98,13 +104,12 @@ namespace MauiChatApp.Core.Tests
         [TestMethod]
         public void TestServerInternalCommands()
         {
+            EnsureUserRepo();
+            Assert.IsNotNull(Users);
             ChatServer chatServer = new();
-            SimpleUserRepository userRepository = new();
-            var users = userRepository.GetUsers();
-            Assert.IsNotNull(users);
             #region [ ConnectAsUser ]
-            string userId = users.First().UserId;
-            ChatIndentity indentity = new() { Id = userId, IndentityType = "User" };
+            string userId = Users.First().UserId;
+            ChatIndentity indentity = new() { Id = userId, IndentityType = ChatIndentity.UserType };
             ChatServer.ConnectAsUser(indentity);
             var outIndentity = ChatServer.GetUserIndentity(userId);
             Assert.AreEqual(indentity.Id, outIndentity.Id);
@@ -126,6 +131,56 @@ namespace MauiChatApp.Core.Tests
             #endregion [ ConnectSession ]
         }
         [TestMethod]
+        public void TestHopChain()
+        {
+            ChatIndentity a = new() { Id = "1", IndentityType = ChatIndentity.UserType, Name = "Tester", Status = "Connected" };
+            ChatIndentity b = new() { Id = "1", IndentityType = ChatIndentity.RoomType, Name = "Test Room", Status = "Connected" };
+
+            //Hop chain from User A to Room B
+            ChatHopChain chatHopChain = new();
+            chatHopChain.Requestor = a;
+
+            //Hops: A
+            Assert.IsTrue(chatHopChain.HasNextHop());
+            chatHopChain = chatHopChain.GetNextHop(a, b);
+            Assert.IsNotNull(chatHopChain);
+            Assert.AreEqual(1, chatHopChain.IdentityChain.Count);
+            Assert.AreEqual(a.Id, chatHopChain.IdentityChain[chatHopChain.IdentityChain.Count - 1].Id);
+
+
+            //Hops: A -> Server
+            Assert.IsTrue(chatHopChain.HasNextHop());
+            chatHopChain = chatHopChain.GetNextHop(a, b);
+            Assert.IsNotNull(chatHopChain);
+            Assert.AreEqual(2, chatHopChain.IdentityChain.Count);
+            Assert.AreEqual(IComMessageHandler.ServerId, chatHopChain.IdentityChain[chatHopChain.IdentityChain.Count - 1].Id);
+
+            //Hops: A -> Server -> B
+            Assert.IsTrue(chatHopChain.HasNextHop());
+            chatHopChain = chatHopChain.GetNextHop(a, b);
+            Assert.IsNotNull(chatHopChain);
+            Assert.AreEqual(3, chatHopChain.IdentityChain.Count);
+            Assert.AreEqual(b.Id, chatHopChain.IdentityChain[chatHopChain.IdentityChain.Count - 1].Id);
+
+            //Hops: A -> Server -> B -> Server
+            Assert.IsTrue(chatHopChain.HasNextHop());
+            chatHopChain = chatHopChain.GetNextHop(a, b);
+            Assert.IsNotNull(chatHopChain);
+            Assert.AreEqual(4, chatHopChain.IdentityChain.Count);
+            Assert.AreEqual(IComMessageHandler.ServerId, chatHopChain.IdentityChain[chatHopChain.IdentityChain.Count - 1].Id);
+
+            //Hops: A -> Server -> B -> Server -> A
+            Assert.IsTrue(chatHopChain.HasNextHop());
+            chatHopChain = chatHopChain.GetNextHop(a, b);
+            Assert.IsNotNull(chatHopChain);
+            Assert.AreEqual(5, chatHopChain.IdentityChain.Count);
+            Assert.AreEqual(a.Id, chatHopChain.IdentityChain[chatHopChain.IdentityChain.Count - 1].Id);
+
+
+            //No More Hops
+            Assert.IsTrue(!chatHopChain.HasNextHop());
+        }
+        [TestMethod]
         public void TestSimpleChatMessage()
         {
             EnsureServerClientSetup();
@@ -140,7 +195,6 @@ namespace MauiChatApp.Core.Tests
             chatMessageService.ProcessIncomingMessages();
 
         }
-
         [TestMethod]
         public void TestIndentityInfoResponseMessage()
         {
@@ -163,13 +217,87 @@ namespace MauiChatApp.Core.Tests
             Assert.IsNotNull(indentityInfoResponse);
             Assert.IsTrue(indentityInfoResponse.Result != null && indentityInfoResponse.Result.Count > 0);
         }
+        [TestMethod]
+        public void TestConnectResponseMessage()
+        {
+            EnsureServerClientSetup();
+            Assert.IsNotNull(Client);
+            Assert.IsTrue(Client.IsRunning);
+            EnsureUserRepo();
+            Assert.IsNotNull(Users);
+
+            ChatServer chatServer = new();
+
+            string userIdExist = Users.First().UserId;
+            string userId = Users[1].UserId;
+            ChatIndentity indentity = new() { Id = userId, IndentityType = ChatIndentity.UserType };
+
+            var connectRequest = ChatMessageService.CreateNewConnectRequest(true, indentity);
+            //Connect as User initially
+            Client.Send(connectRequest);
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+            ChatMessageService chatMessageService = new();
+            chatMessageService.ProcessIncomingMessages();
+            Assert.IsNotNull(ChatMessageService.HistoricalDisplayMessages);
+
+            var connectResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.ConnectedMessage);
+            Assert.IsNotNull(connectResponseMessage);
+            var connectResponse = connectResponseMessage.Message.FromJson<MessageConnectResponse>();
+            Assert.IsNotNull(connectResponse);
+            Assert.IsTrue(connectResponse.Result > 0);
+            int connectionId = connectResponse.Result;
+            Assert.IsTrue(connectResponse.IsSuccess);
+            ChatMessageService.HistoricalDisplayMessages.Clear();
+
+            //Try to connect as user again. This should fail.
+            Client.Send(connectRequest);
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+            chatMessageService.ProcessIncomingMessages();
+
+            connectResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.ConnectedMessage);
+            Assert.IsNotNull(connectResponseMessage);
+            connectResponse = connectResponseMessage.Message.FromJson<MessageConnectResponse>();
+            Assert.IsNotNull(connectResponse);
+            Assert.IsTrue(connectResponse.Result == 0);
+            Assert.IsTrue(!connectResponse.IsSuccess);
+            ChatMessageService.HistoricalDisplayMessages.Clear();
+
+
+            //Connect with connection id as Indentity
+            connectRequest = ChatMessageService.CreateNewConnectRequest(false, indentity);
+            connectRequest.ConnectionId = connectionId;
+            Client.Send(connectRequest);
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+            chatMessageService.ProcessIncomingMessages();
+
+            connectResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.ConnectedMessage);
+            Assert.IsNotNull(connectResponseMessage);
+            connectResponse = connectResponseMessage.Message.FromJson<MessageConnectResponse>();
+            Assert.IsNotNull(connectResponse);
+            Console.WriteLine(connectResponse.ErrorMessage);
+            Assert.IsTrue(connectResponse.Result == connectionId);
+            Assert.IsTrue(connectResponse.IsSuccess);
+
+
+        }
+
+        [TestMethod]
+        public void TestPingResponseMessage()
+        {
+            //Ping -> To Server -> To Client2 -> To Server -> To Client
+            //Custom Message type to control server direction and hops.
+            Assert.IsTrue(false);
+        }
         #region [ Test Helpers ]
         public void EnsureServerClientSetup()
         {
-            EnsurServerSetup();
-            EnsurClientSetup();
+            EnsureServerSetup();
+            EnsureClientSetup();
         }
-        public void EnsurServerSetup(bool force = false)
+        public void EnsureServerSetup(bool force = false)
         {
             if (Server == null || force)
             {
@@ -181,7 +309,7 @@ namespace MauiChatApp.Core.Tests
             MyChatServer = new();
         }
 
-        public void EnsurClientSetup(bool force = false)
+        public void EnsureClientSetup(bool force = false)
         {
             if (Client == null || force)
             {
@@ -189,6 +317,35 @@ namespace MauiChatApp.Core.Tests
                 Client = new();
                 ClientPort = ComSocketHelper.TcpOpenPort();
                 Client.StartClient(IpAddress, ClientPort, IpAddress, ServerPort);
+            }
+        }
+
+        public void EnsureClient2Setup(bool force = false)
+        {
+            if (Client2 == null || force)
+            {
+                Client2?.Dispose();
+                Client2 = new();
+                Client2Port = ComSocketHelper.TcpOpenPort();
+                Client2.StartClient(IpAddress, Client2Port, IpAddress, ServerPort);
+            }
+        }
+
+        public void EnsureUserRepo(bool force = false)
+        {
+            if (force || Users == null || Users.Count == 0)
+            {
+                if (UserRepository != null)
+                {
+                    try
+                    {
+                        UserRepository.Dispose();
+                    }
+                    catch { }
+                }
+
+                UserRepository = new SimpleUserRepository();
+                Users = UserRepository.GetUsers();
             }
         }
         public void WaitForMessagesToProcess()

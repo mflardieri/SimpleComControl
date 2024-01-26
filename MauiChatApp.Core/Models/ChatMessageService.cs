@@ -1,5 +1,6 @@
 ﻿using MauiChatApp.Core.Enums;
 using SimpleComControl.Core.Helpers;
+using SimpleComControl.Core.Interfaces;
 
 namespace MauiChatApp.Core.Models
 {
@@ -17,37 +18,59 @@ namespace MauiChatApp.Core.Models
 
         private static readonly object lockMessages = new();
 
-        public static void SetConnectionId(int connnectionId) 
+        public static void SetConnectionId(int connnectionId)
         {
             UserConnectionId = connnectionId;
         }
-        public static void SetUserIndentity(ChatIndentity userIndentity) 
+        public static void SetUserIndentity(ChatIndentity userIndentity)
         {
             UserIndentity = userIndentity;
         }
         public static ChatMessage CreateNewIndentityRequest(MessageIndentityInquiryType inquiryType, ChatIndentity current = null)
         {
-            var request = new MessageIndentityRequest() {  Indentity = UserIndentity, Current = current, InquiryType = inquiryType  };
-            return new ChatMessage() {
+            var request = new MessageIndentityRequest() { Indentity = UserIndentity, Current = current, InquiryType = inquiryType };
+            return new ChatMessage()
+            {
                 ConnectionId = UserConnectionId,
                 FromEntityId = UserIndentity == null ? "" : UserIndentity.Id,
-                ToEntityId = "Server",
+                ToEntityId = IComMessageHandler.ServerId,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.IndentityInfo,
                 Message = request.ToJson(false)
             };
         }
         public static ChatMessage CreateNewTestRequest()
         {
-            var request = new ChatMessageRequest<string>() { Indentity = UserIndentity, Data ="Testing" };
+            var request = new ChatMessageRequest<string>() { Indentity = UserIndentity, Data = "Testing" };
             return new ChatMessage()
             {
                 ConnectionId = UserConnectionId,
                 FromEntityId = UserIndentity == null ? "" : UserIndentity.Id,
-                ToEntityId = "Server",
+                ToEntityId = IComMessageHandler.ServerId,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.TestMessage,
                 Message = request.ToJson(false)
             };
         }
+        public static ChatMessage CreateNewConnectRequest(bool connectAs = false, ChatIndentity current = null)
+        {
+            current ??= UserIndentity;
+
+            var request = new MessageConnectRequest() { ConnectAs = connectAs, Indentity = current };
+
+            return new ChatMessage()
+            {
+                ConnectionId = UserConnectionId,
+                FromEntityId = UserIndentity == null ? "" : UserIndentity.Id,
+                ToEntityId = IComMessageHandler.ServerId,
+                MessageType = SimpleComControl.Core.Enums.ComMessageType.Connnect,
+                Message = request.ToJson(false)
+            };
+        }
+
+        public static ChatMessage CreatePingMessage(ChatIndentity current)
+        {
+            return null;
+        }
+        
 
         public static bool HasMessagesToProcess()
         {
@@ -71,7 +94,7 @@ namespace MauiChatApp.Core.Models
                 IncomingMessages ??= new();
                 DisplayMessages ??= new();
                 HistoricalDisplayMessages ??= new();
-                
+
                 if (!IsInitialized)
                 {
                     IsInitialized = true;
@@ -80,7 +103,7 @@ namespace MauiChatApp.Core.Models
                         IncomingMessages.InsertRange(0, HistoricalDisplayMessages);
                     }
                 }
-                
+
                 foreach (ChatMessage msg in IncomingMessages)
                 {
                     if (msg != null && !string.IsNullOrWhiteSpace(msg.Message) && msg.IsValid())
@@ -91,9 +114,9 @@ namespace MauiChatApp.Core.Models
                             //Filter, Convert, Apply to Output as needed
                             //DisplayMessages.Add(msg.message);
                         }
-                        else 
+                        else
                         {
-                            
+
                         }
                     }
                 }
@@ -116,5 +139,6 @@ namespace MauiChatApp.Core.Models
         {
             OnNewMessagesAdded?.Invoke();
         }
+
     }
 }

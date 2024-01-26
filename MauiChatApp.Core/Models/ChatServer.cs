@@ -1,5 +1,6 @@
 ﻿using MauiChatApp.Core.Enums;
 using MauiChatApp.Core.Interfaces;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 namespace MauiChatApp.Core.Models
@@ -12,7 +13,7 @@ namespace MauiChatApp.Core.Models
         private static Dictionary<string, int> UserConnections { get; set; }
         private static int LastConnectionId { get; set; }
 
-        private static Dictionary<string, ChatEndpoint> UserEndPoints { get; set; }
+        private static Dictionary<string, List<ChatEndpoint>> UserEndPoints { get; set; }
         private static Dictionary<string, Socket> EndPointSockets { get; set; }
         private static Dictionary<string, ChatIndentity> UserIndentities { get; set; }
         private static Dictionary<string, ChatIndentity> RoomIndentities { get; set; }
@@ -49,7 +50,8 @@ namespace MauiChatApp.Core.Models
                     connectionId = LastConnectionId;
                     UserConnections.Add(endpoint.ToString(), connectionId);
                 }
-                if(socket != null) 
+                //Add User Socket
+                if (socket != null) 
                 {
                     EndPointSockets[endpoint.ToString()] = socket;
                 }
@@ -72,7 +74,7 @@ namespace MauiChatApp.Core.Models
         {
             if (indentity == null) { throw new ArgumentNullException(nameof(indentity), "You must supply an indentity"); }
             if (string.IsNullOrWhiteSpace(indentity.Id)) { throw new NullReferenceException("Id is blank."); }
-            if (string.IsNullOrEmpty(indentity.IndentityType) || indentity.IndentityType != "User") { throw new Exception("Only Users can connect to a server"); }
+            if (string.IsNullOrEmpty(indentity.IndentityType) || indentity.IndentityType != ChatIndentity.UserType) { throw new Exception("Only Users can connect to a server"); }
             lock (LockOps)
             {
                 if (!UsersConnected.Contains(indentity.Id))
@@ -88,7 +90,30 @@ namespace MauiChatApp.Core.Models
                         throw new Exception("User does not exist.");
                     }
                 }
+                else 
+                {
+                    throw new Exception("User already connected.");
+                }
             }
+        }
+        public static int ConnectUserIndentity(ChatIndentity chatIndentity, ChatEndpoint endpoint)
+        {
+
+            if (chatIndentity != null)
+            {
+                if (!UserEndPoints.TryGetValue(endpoint.ToString(), out List<ChatEndpoint> ueps))
+                {
+                    ueps = new List<ChatEndpoint>();
+                }
+                if (ueps.FirstOrDefault(x => x.ToString() == endpoint.ToString()) == null)
+                {
+                    ueps.Add(endpoint);
+                    UserEndPoints[chatIndentity.Id] = ueps;
+                }
+
+                return GetConnectionId(endpoint) ?? 0;
+            }
+            return 0;
         }
 
         public static ChatIndentity GetUserIndentity(string Id)
@@ -124,9 +149,9 @@ namespace MauiChatApp.Core.Models
             }
             return null;
         }
-        public static Dictionary<string, ChatEndpoint> GetRoomUserEndPoints(string roomId)
+        public static Dictionary<string, List<ChatEndpoint>> GetRoomUserEndPoints(string roomId)
         {
-            var rtnVal = new Dictionary<string, ChatEndpoint>();
+            var rtnVal = new Dictionary<string, List<ChatEndpoint>>();
             lock (LockOps)
             {
 
@@ -137,7 +162,7 @@ namespace MauiChatApp.Core.Models
                     {
                         foreach (var  u in room.SubIdentities)
                         {
-                            if (UserEndPoints != null && UserEndPoints.TryGetValue(u.Id, out ChatEndpoint value))
+                            if (UserEndPoints != null && UserEndPoints.TryGetValue(u.Id, out List<ChatEndpoint> value))
                             {
                                 rtnVal.Add(u.Id, value);
                             }
@@ -152,7 +177,7 @@ namespace MauiChatApp.Core.Models
             var rtnVal = new Dictionary<string, Socket>();
             lock (LockOps)
             {
-                Dictionary<string, ChatEndpoint> endpoints = GetRoomUserEndPoints(roomId);
+                Dictionary<string, List<ChatEndpoint>> endpoints = GetRoomUserEndPoints(roomId);
                 if (endpoints != null)
                 {
                     foreach (var kv in endpoints) 
@@ -169,11 +194,11 @@ namespace MauiChatApp.Core.Models
             }
             return rtnVal;
         }
-        public static ChatEndpoint GetUserEndPoint(string userId)
+        public static List<ChatEndpoint> GetUserEndPoints(string userId)
         {
             lock (LockOps)
             {
-                if (UserEndPoints != null && UserEndPoints.TryGetValue(userId, out ChatEndpoint value))
+                if (UserEndPoints != null && UserEndPoints.TryGetValue(userId, out List<ChatEndpoint> value))
                 {
                     return value;
                 }
@@ -184,14 +209,19 @@ namespace MauiChatApp.Core.Models
             }
 
         }
-        public static Socket GetUserSocket(string userId)
+        public static List<Socket> GetUserSockets(string userId)
         {
             lock (LockOps)
             {
-                ChatEndpoint endpoint = GetUserEndPoint(userId);
-                if (endpoint != null)
+                List<ChatEndpoint> endpoints = GetUserEndPoints(userId);
+                if (endpoints != null && endpoints.Count > 0)
                 {
-                    return GetSocket(endpoint);
+                    List<Socket> result = new();
+                    foreach (var endpoint in endpoints)
+                    {
+                        result.Add(GetSocket(endpoint));
+                    }
+                    return result;
                 }
                 else
                 {
@@ -249,17 +279,18 @@ namespace MauiChatApp.Core.Models
             return new ChatIndentity()
             {
                 Id = userDef.UserId,
-                IndentityType = "User",
+                IndentityType = ChatIndentity.UserType,
                 Name = userDef.Name,
                 Status = status
             };
         }
+
         public static ChatIndentity RoomToChatIndentity(IRoomDef roomDef, string status = "Active")
         {
             return new ChatIndentity()
             {
                 Id = roomDef.RoomId,
-                IndentityType = "Room",
+                IndentityType = ChatIndentity.UserType,
                 Name = roomDef.Name,
                 Status = status,
                 Topic = roomDef.Topic

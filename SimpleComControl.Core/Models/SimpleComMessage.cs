@@ -29,6 +29,11 @@ namespace SimpleComControl.Core.Models
             throw new NotImplementedException();
         }
 
+        public string GetToMessageType()
+        {
+            throw new NotImplementedException();
+        }
+
         public bool IsValid()
         {
             //

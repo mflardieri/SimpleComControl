@@ -5,7 +5,7 @@ namespace SimpleComControl.Core.Interfaces
 {
     public interface IComMessageHandler
     {
-
+        public const string ServerId = "Server";
         public bool ProcessMessage(ComTCPSocket source, Socket targetSocket, IComMessage comMessage);
         public byte[] Convert(IComMessage comMessage);
         public IComMessage Convert(byte[] buffer, int bytes);

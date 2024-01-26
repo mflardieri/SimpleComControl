@@ -4,6 +4,8 @@ namespace MauiChatApp.Core.Models
 {
     public class ChatIndentity : IComIdentity
     {
+        public const string UserType = "U";
+        public const string RoomType = "R";
         public string Id { get; set; }
         public string Name { get; set; }
         public string IndentityType { get; set; }

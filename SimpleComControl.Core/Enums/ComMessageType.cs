@@ -12,9 +12,10 @@
         IndentityInfoResponse,
         SentMessage,
         ReceivedMessage,
-        ResendMessage,
+        //ResendMessage,
         TestMessage,
         TestResponse,
         HelpMessage,
+        HelpResponse,
     }
 }

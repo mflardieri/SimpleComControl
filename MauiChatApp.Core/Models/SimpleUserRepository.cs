@@ -10,6 +10,8 @@ namespace MauiChatApp.Core.Models
             public string UserId { get; set; }
         }
         private static List<SimpleUser> _users = new();
+        private bool disposedValue;
+
         public List<IUserDef> GetUsers(Func<IUserDef, bool> exp = null)
         {
             SeedUsers();
@@ -31,6 +33,36 @@ namespace MauiChatApp.Core.Models
                 _users.Add(new SimpleUser() { Name = "Spock", UserId = "2" });
                 _users.Add(new SimpleUser() { Name = "Bones", UserId = "3" });
             }
+        }
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // TODO: dispose managed state (managed objects)
+                    _users = null;
+                }
+
+                // TODO: free unmanaged resources (unmanaged objects) and override finalizer
+                // TODO: set large fields to null
+                disposedValue = true;
+            }
+        }
+
+        // // TODO: override finalizer only if 'Dispose(bool disposing)' has code to free unmanaged resources
+        // ~SimpleUserRepository()
+        // {
+        //     // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+        //     Dispose(disposing: false);
+        // }
+
+        public void Dispose()
+        {
+            // Do not change this code. Put cleanup code in 'Dispose(bool disposing)' method
+            Dispose(disposing: true);
+            GC.SuppressFinalize(this);
         }
     }
 }

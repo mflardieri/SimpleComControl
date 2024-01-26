@@ -15,6 +15,7 @@ namespace MauiChatApp.Core.Models
 
         public string ToEntityId { get; set; }
 
+        public string ToMessageType { get; set; }
 
         public int GetConnectionId()
         {
@@ -36,6 +37,11 @@ namespace MauiChatApp.Core.Models
         {
             //Cache Repo
             throw new NotImplementedException();
+        }
+
+        public string GetToMessageType()
+        {
+            return ToMessageType;
         }
 
         public bool IsValid()

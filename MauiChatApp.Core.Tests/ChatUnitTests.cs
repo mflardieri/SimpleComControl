@@ -106,18 +106,21 @@ namespace MauiChatApp.Core.Tests
         {
             EnsureUserRepo();
             Assert.IsNotNull(Users);
-            ChatServer chatServer = new();
+            
+            //Bare bones setup for chat server.
+            MyChatServer = new(true);
+            
             #region [ ConnectAsUser ]
             string userId = Users.First().UserId;
-            ChatIndentity indentity = new() { Id = userId, IndentityType = ChatIndentity.UserType };
-            ChatServer.ConnectAsUser(indentity);
-            var outIndentity = ChatServer.GetUserIndentity(userId);
-            Assert.AreEqual(indentity.Id, outIndentity.Id);
+            ChatIdentity identity = new() { Id = userId, IdentityType = ChatIdentity.UserType };
+            ChatServer.ConnectAsUser(identity);
+            var outIdentity = ChatServer.GetUserIdentity(userId);
+            Assert.AreEqual(identity.Id, outIdentity.Id);
             userId = "TestThisShouldNotExistId";
-            indentity.Id = userId;
-            Assert.ThrowsException<Exception>(() => ChatServer.ConnectAsUser(indentity));
-            outIndentity = ChatServer.GetUserIndentity(userId);
-            Assert.IsNull(outIndentity);
+            identity.Id = userId;
+            Assert.ThrowsException<Exception>(() => ChatServer.ConnectAsUser(identity));
+            outIdentity = ChatServer.GetUserIdentity(userId);
+            Assert.IsNull(outIdentity);
             #endregion [ ConnectAsUser ]
 
             #region [ ConnectSession ]
@@ -133,8 +136,8 @@ namespace MauiChatApp.Core.Tests
         [TestMethod]
         public void TestHopChain()
         {
-            ChatIndentity a = new() { Id = "1", IndentityType = ChatIndentity.UserType, Name = "Tester", Status = "Connected" };
-            ChatIndentity b = new() { Id = "1", IndentityType = ChatIndentity.RoomType, Name = "Test Room", Status = "Connected" };
+            ChatIdentity a = new() { Id = "1", IdentityType = ChatIdentity.UserType, Name = "Tester", Status = "Connected" };
+            ChatIdentity b = new() { Id = "1", IdentityType = ChatIdentity.RoomType, Name = "Test Room", Status = "Connected" };
 
             //Hop chain from User A to Room B
             ChatHopChain chatHopChain = new();
@@ -196,14 +199,14 @@ namespace MauiChatApp.Core.Tests
 
         }
         [TestMethod]
-        public void TestIndentityInfoResponseMessage()
+        public void TestIdentityInfoResponseMessage()
         {
             EnsureServerClientSetup();
             Assert.IsNotNull(Client);
             Assert.IsTrue(Client.IsRunning);
             //Simulate Message Sent
-            var indentityInfoRequest = ChatMessageService.CreateNewIndentityRequest(Enums.MessageIndentityInquiryType.AvailableUsers);
-            Client.Send(indentityInfoRequest);
+            var identityInfoRequest = ChatMessageService.CreateNewIdentityRequest(Enums.MessageIdentityInquiryType.AvailableUsers);
+            Client.Send(identityInfoRequest);
             WaitForMessagesToProcess();
             Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
             ChatMessageService chatMessageService = new();
@@ -211,28 +214,26 @@ namespace MauiChatApp.Core.Tests
             Assert.IsNotNull(ChatMessageService.HistoricalDisplayMessages);
 
             //Assert Available UserInfo As been given.
-            var indentityInfoResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.IndentityInfoResponse);
-            Assert.IsNotNull(indentityInfoResponseMessage);
-            var indentityInfoResponse = indentityInfoResponseMessage.Message.FromJson<MessageIndentityResponse>();
-            Assert.IsNotNull(indentityInfoResponse);
-            Assert.IsTrue(indentityInfoResponse.Result != null && indentityInfoResponse.Result.Count > 0);
+            var identityInfoResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.IdentityInfoResponse);
+            Assert.IsNotNull(identityInfoResponseMessage);
+            var identityInfoResponse = identityInfoResponseMessage.Message.FromJson<MessageIdentityResponse>();
+            Assert.IsNotNull(identityInfoResponse);
+            Assert.IsTrue(identityInfoResponse.Result != null && identityInfoResponse.Result.Count > 0);
         }
         [TestMethod]
         public void TestConnectResponseMessage()
         {
-            EnsureServerClientSetup();
+            EnsureServerClientSetup(resetChatServer: true);
             Assert.IsNotNull(Client);
             Assert.IsTrue(Client.IsRunning);
             EnsureUserRepo();
             Assert.IsNotNull(Users);
 
-            ChatServer chatServer = new();
-
             string userIdExist = Users.First().UserId;
             string userId = Users[1].UserId;
-            ChatIndentity indentity = new() { Id = userId, IndentityType = ChatIndentity.UserType };
+            ChatIdentity identity = new() { Id = userId, IdentityType = ChatIdentity.UserType };
 
-            var connectRequest = ChatMessageService.CreateNewConnectRequest(true, indentity);
+            var connectRequest = ChatMessageService.CreateNewConnectRequest(true, identity);
             //Connect as User initially
             Client.Send(connectRequest);
             WaitForMessagesToProcess();
@@ -265,8 +266,8 @@ namespace MauiChatApp.Core.Tests
             ChatMessageService.HistoricalDisplayMessages.Clear();
 
 
-            //Connect with connection id as Indentity
-            connectRequest = ChatMessageService.CreateNewConnectRequest(false, indentity);
+            //Connect with connection id as Identity
+            connectRequest = ChatMessageService.CreateNewConnectRequest(false, identity);
             connectRequest.ConnectionId = connectionId;
             Client.Send(connectRequest);
             WaitForMessagesToProcess();
@@ -287,17 +288,53 @@ namespace MauiChatApp.Core.Tests
         [TestMethod]
         public void TestPingResponseMessage()
         {
-            //Ping -> To Server -> To Client2 -> To Server -> To Client
+            //Ping: Client #1  -> To Server -> To Client #2 -> To Server -> To Client #1
             //Custom Message type to control server direction and hops.
-            Assert.IsTrue(false);
+            EnsureServerClientSetup(resetChatServer: true);
+            Assert.IsNotNull(Client);
+            Assert.IsTrue(Client.IsRunning);
+            Assert.IsNotNull(Client._socket);
+            EnsureClient2Setup();
+            Assert.IsNotNull(Client2);
+            Assert.IsTrue(Client2.IsRunning);
+            Assert.IsNotNull(Client2._socket);
+
+
+            EnsureUserRepo();
+            Assert.IsNotNull(Users);
+            Assert.IsTrue(Users.Count > 1);
+            IUserDef currentUser = Users[0];
+            IUserDef pingUser = Users[1];
+            ChatIdentity iCurrentUser = ChatServer.UserToChatIdentity(currentUser);
+            ChatIdentity iPingUser = ChatServer.UserToChatIdentity(pingUser);
+           
+            //Register Current User as Client #1
+            ChatServer.ConnectAsUser(iCurrentUser);
+            int cIdCurrentUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client._socket.RemoteEndPoint as System.Net.IPEndPoint), Client._socket);
+            Assert.IsTrue(cIdCurrentUser > 0);
+
+            //Register Ping User as Client #2
+            ChatServer.ConnectAsUser(iPingUser);
+            int cIdPingUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client2._socket.RemoteEndPoint as System.Net.IPEndPoint), Client2._socket);
+            Assert.IsTrue(cIdPingUser > 0);
+
+            var pingRequest = ChatMessageService.CreatePingMessage(iPingUser, null, iCurrentUser);
+
+            //Send Request to Server
+            Client.Send(pingRequest);
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+
+
+            //Assert.IsTrue(false);
         }
         #region [ Test Helpers ]
-        public void EnsureServerClientSetup()
+        public void EnsureServerClientSetup(bool forceServer = false, bool resetChatServer = false, bool forceClientSetup = false)
         {
-            EnsureServerSetup();
-            EnsureClientSetup();
+            EnsureServerSetup(forceServer, resetChatServer);
+            EnsureClientSetup(forceClientSetup);
         }
-        public void EnsureServerSetup(bool force = false)
+        public void EnsureServerSetup(bool force = false, bool resetChatServer = false)
         {
             if (Server == null || force)
             {
@@ -306,7 +343,7 @@ namespace MauiChatApp.Core.Tests
             Server = new();
             ServerPort = ComSocketHelper.TcpOpenPort();
             Server.StartServer(IpAddress, ServerPort);
-            MyChatServer = new();
+            MyChatServer = new(resetChatServer);
         }
 
         public void EnsureClientSetup(bool force = false)

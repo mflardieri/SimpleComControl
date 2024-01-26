@@ -7,9 +7,9 @@ namespace MauiChatApp.Core.Models
     public class ChatMessageService
     {
         private static int UserConnectionId { get; set; }
-        private static ChatIndentity UserIndentity { get; set; }
+        private static ChatIdentity UserIdentity { get; set; }
         public static List<ChatMessage> HistoricalDisplayMessages { get; set; }
-        public static Dictionary<string, ChatIndentity> CachedIndentities { get; set; }
+        public static Dictionary<string, ChatIdentity> CachedIdentities { get; set; }
         public bool IsInitialized { get; set; }
 
         //Room or Private Chat
@@ -22,55 +22,73 @@ namespace MauiChatApp.Core.Models
         {
             UserConnectionId = connnectionId;
         }
-        public static void SetUserIndentity(ChatIndentity userIndentity)
+        public static void SetUserIdentity(ChatIdentity userIdentity)
         {
-            UserIndentity = userIndentity;
+            UserIdentity = userIdentity;
         }
-        public static ChatMessage CreateNewIndentityRequest(MessageIndentityInquiryType inquiryType, ChatIndentity current = null)
+        public static ChatMessage CreateNewIdentityRequest(MessageIdentityInquiryType inquiryType, ChatIdentity current = null)
         {
-            var request = new MessageIndentityRequest() { Indentity = UserIndentity, Current = current, InquiryType = inquiryType };
+            var request = new MessageIdentityRequest() { Identity = UserIdentity, Current = current, InquiryType = inquiryType };
             return new ChatMessage()
             {
                 ConnectionId = UserConnectionId,
-                FromEntityId = UserIndentity == null ? "" : UserIndentity.Id,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
                 ToEntityId = IComMessageHandler.ServerId,
-                MessageType = SimpleComControl.Core.Enums.ComMessageType.IndentityInfo,
+                MessageType = SimpleComControl.Core.Enums.ComMessageType.IdentityInfo,
                 Message = request.ToJson(false)
             };
         }
         public static ChatMessage CreateNewTestRequest()
         {
-            var request = new ChatMessageRequest<string>() { Indentity = UserIndentity, Data = "Testing" };
+            var request = new ChatMessageRequest<string>() { Identity = UserIdentity, Data = "Testing" };
             return new ChatMessage()
             {
                 ConnectionId = UserConnectionId,
-                FromEntityId = UserIndentity == null ? "" : UserIndentity.Id,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
                 ToEntityId = IComMessageHandler.ServerId,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.TestMessage,
                 Message = request.ToJson(false)
             };
         }
-        public static ChatMessage CreateNewConnectRequest(bool connectAs = false, ChatIndentity current = null)
+        public static ChatMessage CreateNewConnectRequest(bool connectAs = false, ChatIdentity current = null)
         {
-            current ??= UserIndentity;
+            current ??= UserIdentity;
 
-            var request = new MessageConnectRequest() { ConnectAs = connectAs, Indentity = current };
+            var request = new MessageConnectRequest() { ConnectAs = connectAs, Identity = current };
 
             return new ChatMessage()
             {
                 ConnectionId = UserConnectionId,
-                FromEntityId = UserIndentity == null ? "" : UserIndentity.Id,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
                 ToEntityId = IComMessageHandler.ServerId,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.Connnect,
                 Message = request.ToJson(false)
             };
         }
 
-        public static ChatMessage CreatePingMessage(ChatIndentity current)
+        public static ChatMessage CreatePingMessage(ChatIdentity ping, ChatHopChain startHop = null, ChatIdentity current = null)
         {
-            return null;
+            current ??= UserIdentity;
+            if (current == null) { throw new ArgumentNullException(nameof(current), "You must supply a current identity."); }
+            if (ping == null) { throw new ArgumentNullException(nameof(ping), "You must supply a identity to ping."); }
+
+
+            startHop ??= new();
+            startHop.Requestor = current;
+            if (startHop.ChainPosition > 0 && !startHop.HasNextHop()) { throw new Exception(""); }
+            startHop = startHop.GetNextHop(current, ping);
+            var request = new MessagePingRequest() { Identity = ping, HopChain = startHop };
+
+            return new ChatMessage()
+            {
+                ConnectionId = UserConnectionId,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                ToEntityId = ping.Id,
+                MessageType = SimpleComControl.Core.Enums.ComMessageType.Ping,
+                Message = request.ToJson(false)
+            };
         }
-        
+
 
         public static bool HasMessagesToProcess()
         {

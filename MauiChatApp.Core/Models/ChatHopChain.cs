@@ -10,10 +10,10 @@ namespace MauiChatApp.Core.Models
 {
     public class ChatHopChain
     {
-        public ChatIndentity Requestor { get; set; }
-        public List<ChatIndentity> IdentityChain { get; set; }
+        public ChatIdentity Requestor { get; set; }
+        public List<ChatIdentity> IdentityChain { get; set; }
         public int ChainPosition { get; set; }
-        public bool IsValidChain(ChatIndentity requestor, ChatIndentity a, ChatIndentity b)
+        public bool IsValidChain(ChatIdentity requestor, ChatIdentity a, ChatIdentity b)
         {
             bool rtnVal = false;
             if (requestor != null && a != null && b != null && IdentityChain != null && ChainPosition > 0 && ChainPosition + 1 > IdentityChain.Count && IdentityChain.Count <= 5)
@@ -21,8 +21,8 @@ namespace MauiChatApp.Core.Models
                 rtnVal = true;
                 for (int x = 1; x > ChainPosition; x++)
                 {
-                    ChatIndentity to = Requestor.Equals(a) ? a : b;
-                    ChatIndentity from = !Requestor.Equals(b) ? b : a;
+                    ChatIdentity to = Requestor.Equals(a) ? a : b;
+                    ChatIdentity from = !Requestor.Equals(b) ? b : a;
 
 
                     bool isServer = (x % 2 == 0);
@@ -32,7 +32,7 @@ namespace MauiChatApp.Core.Models
                     {
                         if (isServer)
                         {
-                            if (currIdentity.Id != IComMessageHandler.ServerId || !string.IsNullOrWhiteSpace(currIdentity.IndentityType))
+                            if (currIdentity.Id != IComMessageHandler.ServerId || !string.IsNullOrWhiteSpace(currIdentity.IdentityType))
                             {
                                 rtnVal = false;
                             }
@@ -42,11 +42,11 @@ namespace MauiChatApp.Core.Models
                             if (x == 3)
                             {
                                 //From Check
-                                if (!IndentityMatches(currIdentity, from))
+                                if (!IdentityMatches(currIdentity, from))
                                 {
                                     rtnVal = false;
                                 }
-                                if (rtnVal && IndentityMatches(Requestor, from))
+                                if (rtnVal && IdentityMatches(Requestor, from))
                                 {
                                     rtnVal = false;
                                 }
@@ -54,11 +54,11 @@ namespace MauiChatApp.Core.Models
                             else
                             {
                                 //To Check
-                                if (!IndentityMatches(currIdentity, to))
+                                if (!IdentityMatches(currIdentity, to))
                                 {
                                     rtnVal = false;
                                 }
-                                if (rtnVal && !IndentityMatches(Requestor, to))
+                                if (rtnVal && !IdentityMatches(Requestor, to))
                                 {
                                     rtnVal = false;
                                 }
@@ -76,13 +76,13 @@ namespace MauiChatApp.Core.Models
             return ChainPosition == 0 || ChainPosition < 5;
         }
 
-        public ChatHopChain GetNextHop(ChatIndentity a, ChatIndentity b)
+        public ChatHopChain GetNextHop(ChatIdentity a, ChatIdentity b)
         {
             ChatHopChain rtnVal = null;
             if (ChainPosition == 0 || (HasNextHop() && IsValidChain(Requestor, a, b)))
             {
-                ChatIndentity to = Requestor.Equals(a) ? a : b;
-                ChatIndentity from = !Requestor.Equals(b) ? b : a;
+                ChatIdentity to = Requestor.Equals(a) ? a : b;
+                ChatIdentity from = !Requestor.Equals(b) ? b : a;
                 rtnVal = new();
                 rtnVal.Requestor = Requestor;
                 rtnVal.ChainPosition = ChainPosition + 1;
@@ -99,7 +99,7 @@ namespace MauiChatApp.Core.Models
                 {
                     if (rtnVal.ChainPosition % 2 == 0)
                     {
-                        rtnVal.IdentityChain.Add(new ChatIndentity() { Id = IComMessageHandler.ServerId, Name = "Server" });
+                        rtnVal.IdentityChain.Add(new ChatIdentity() { Id = IComMessageHandler.ServerId, Name = "Server" });
                     }
                     else if (rtnVal.ChainPosition == 3)
                     {
@@ -109,7 +109,7 @@ namespace MauiChatApp.Core.Models
             }
             return rtnVal;
         }
-        private static bool IndentityMatches(IComIdentity a, IComIdentity b)
+        public static bool IdentityMatches(IComIdentity a, IComIdentity b)
         {
 
             if (a != null && b != null && !string.IsNullOrWhiteSpace(a.GetIdentityId()?.ToString()) && !string.IsNullOrWhiteSpace(b.GetIdentityId()?.ToString()) &&

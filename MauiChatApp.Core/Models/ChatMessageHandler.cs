@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
+using System.Threading.Tasks.Sources;
 using System.Xml;
 
 namespace MauiChatApp.Core.Models
@@ -74,18 +75,18 @@ namespace MauiChatApp.Core.Models
                             Status = Enums.MessageResponseStatus.Success
                         };
                         break;
-                    case ComMessageType.IndentityInfo:
-                        var indentityRequest = message.Message.FromJson<MessageIndentityRequest>();
-                        if (indentityRequest != null)
+                    case ComMessageType.IdentityInfo:
+                        var identityRequest = message.Message.FromJson<MessageIdentityRequest>();
+                        if (identityRequest != null)
                         {
-                            var indentities = ChatServer.GetIndentities(indentityRequest);
-                            var indentityResponse = new MessageIndentityResponse()
+                            var identities = ChatServer.GetIdentities(identityRequest);
+                            var identityResponse = new MessageIdentityResponse()
                             {
                                 IsSuccess = true,
-                                Result = indentities,
+                                Result = identities,
                                 Status = Enums.MessageResponseStatus.Success
                             };
-                            rtnVal = indentityResponse;
+                            rtnVal = identityResponse;
                         }
                         break;
                     case ComMessageType.Connnect:
@@ -97,10 +98,10 @@ namespace MauiChatApp.Core.Models
                             {
                                 if (connectRequest.ConnectAs)
                                 {
-                                    ChatServer.ConnectAsUser(connectRequest.Indentity);
+                                    ChatServer.ConnectAsUser(connectRequest.Identity);
                                 }
-                                var connectedIndentity = ChatServer.GetUserIndentity(connectRequest.Indentity.Id);
-                                if (connectedIndentity != null)
+                                var connectedIdentity = ChatServer.GetUserIdentity(connectRequest.Identity.Id);
+                                if (connectedIdentity != null)
                                 {
                                     int connectedId = message.ConnectionId;
                                     if (connectedId == 0)
@@ -110,10 +111,10 @@ namespace MauiChatApp.Core.Models
                                     if (connectedId > 0)
                                     {
                                         //Connect the user
-                                        int connectedUserCID = ChatServer.ConnectUserIndentity(connectedIndentity, fromCEP);
+                                        int connectedUserCID = ChatServer.ConnectUserIdentity(connectedIdentity, fromCEP);
                                         if (connectedUserCID != connectedId)
                                         {
-                                            throw new Exception("Connnectoin is bad.");
+                                            throw new Exception("Connnection is bad.");
                                         }
 
                                         //Formulate response
@@ -136,6 +137,33 @@ namespace MauiChatApp.Core.Models
                         }
                         rtnVal = connectedResponse;
                         break;
+                    case ComMessageType.Ping:
+                        var pingRequest = message.Message.FromJson<MessagePingRequest>();
+                        var pingedResponse = new MessagePingResponse();
+                        try 
+                        {
+                            //Check if the Hop is complete
+                            pingedResponse.IsComplete = !pingRequest.HopChain.HasNextHop();
+                            if (!pingedResponse.IsComplete)
+                            {
+                                ChatIdentity pingedIdentity = pingRequest.GetPingedIdentity();
+
+                                if (pingedIdentity == null) { throw new NullReferenceException("Unable to obtain the pinged or destination identitiy"); }
+                                //Get Next Hop
+                                var nextHop = pingRequest.HopChain.GetNextHop(pingRequest.HopChain.Requestor, pingedIdentity);
+                                if (nextHop == null) { throw new NullReferenceException("Unable to obtain the next hop in chain."); }
+                                //Check to see if the Next Hop is Server
+                                //Add Next Hop to response
+                                //pingedResponse.Result = pingRequest.HopChain.GetNextHop(pingRequest.Identity);
+                            }
+                        }
+                        catch (Exception ex) 
+                        {
+                            pingedResponse.ErrorMessage = ex.Message;
+                            pingedResponse.IsSuccess = false;
+                            pingedResponse.Status = Enums.MessageResponseStatus.Error;
+                        }
+                        break;
                 }
             }
             return rtnVal;
@@ -154,7 +182,7 @@ namespace MauiChatApp.Core.Models
                 {
                     #region [ Ignore ]
                     case ComMessageType.TestResponse:
-                    case ComMessageType.IndentityInfoResponse:
+                    case ComMessageType.IdentityInfoResponse:
                     case ComMessageType.ConnectedMessage:
                     case ComMessageType.PingResponse:
                     case ComMessageType.DisconnectedMessage:
@@ -167,18 +195,18 @@ namespace MauiChatApp.Core.Models
                         rtnVal.FromEntityId = IComMessageHandler.ServerId;
                         rtnVal.MessageType = ComMessageType.TestResponse;
                         break;
-                    case ComMessageType.IndentityInfo:
+                    case ComMessageType.IdentityInfo:
                         rtnVal.FromEntityId = IComMessageHandler.ServerId;
-                        rtnVal.MessageType = ComMessageType.IndentityInfoResponse;
+                        rtnVal.MessageType = ComMessageType.IdentityInfoResponse;
                         break;
                     case ComMessageType.Connnect:
                         //Get Information about Connection
                         rtnVal.FromEntityId = IComMessageHandler.ServerId;
                         rtnVal.MessageType = ComMessageType.ConnectedMessage;
                         break;
-                    //case ComMessageType.Ping:
-                    //    //Once Connection is made.
-                    //    break;
+                    case ComMessageType.Ping:
+                        //Once Connection is made.
+                        break;
 
                     //case ComMessageType.Disconnect:
                     //case ComMessageType.SentMessage:
@@ -215,7 +243,7 @@ namespace MauiChatApp.Core.Models
                         Dictionary<string, List<ChatEndpoint>> endpoints = new();
                         switch (chatMessage.MessageType)
                         {
-                            case ComMessageType.IndentityInfo:
+                            case ComMessageType.IdentityInfo:
                             case ComMessageType.TestMessage:
                             case ComMessageType.Connnect:
                                 endpoints.Add(chatMessage.FromEntityId, new List<ChatEndpoint>() { fromCEP });
@@ -232,7 +260,7 @@ namespace MauiChatApp.Core.Models
                                 foreach (var ep in kv.Value)
                                 {
                                     chatSocket.SendServerMessage(returnMessage, ep);
-                                }   
+                                }
                             }
                             catch { }
                         }

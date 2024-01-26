@@ -2,17 +2,17 @@
 
 namespace MauiChatApp.Core.Models
 {
-    public class ChatIndentity : IComIdentity
+    public class ChatIdentity : IComIdentity
     {
         public const string UserType = "U";
         public const string RoomType = "R";
         public string Id { get; set; }
         public string Name { get; set; }
-        public string IndentityType { get; set; }
+        public string IdentityType { get; set; }
         public string Status { get; set; }
 
         public string Topic { get; set; }
-        public List<ChatIndentity> SubIdentities { get; set; }
+        public List<ChatIdentity> SubIdentities { get; set; }
         public object GetIdentityId()
         {
             return Id;
@@ -27,7 +27,7 @@ namespace MauiChatApp.Core.Models
         }
         public string GetIdentityType()
         {
-            return IndentityType;
+            return IdentityType;
         }
         public List<IComIdentity> GetSubIdentities()
         {

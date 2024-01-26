@@ -6,9 +6,10 @@ using System.Threading.Tasks;
 
 namespace MauiChatApp.Core.Enums
 {
-    public enum MessageIndentityInquiryType
+    public enum MessageIdentityInquiryType
+
     {
-        All = 0, //You should only be available if the indentity is set.
+        All = 0, //You should only be available if the identity is set.
         CurrentRoom,
         CurrentUser,
         Users,

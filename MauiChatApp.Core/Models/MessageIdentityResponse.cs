@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace MauiChatApp.Core.Models
 {
-    public class MessageIndentityResponse : MessageResponse<List<ChatIndentity>>
+    public class MessageIdentityResponse : MessageResponse<List<ChatIdentity>>
     {
 
     }

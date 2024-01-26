@@ -5,36 +5,54 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 namespace MauiChatApp.Core.Models
 {
+
+
+
     public class ChatServer
     {
-        private static HashSet<string> RoomsAvailable { get; set; }
-        private static HashSet<string> UsersConnected { get; set; }
-        private static Dictionary<string, List<string>> RoomUsers { get; set; }
-        private static Dictionary<string, int> UserConnections { get; set; }
-        private static int LastConnectionId { get; set; }
 
-        private static Dictionary<string, List<ChatEndpoint>> UserEndPoints { get; set; }
-        private static Dictionary<string, Socket> EndPointSockets { get; set; }
-        private static Dictionary<string, ChatIndentity> UserIndentities { get; set; }
-        private static Dictionary<string, ChatIndentity> RoomIndentities { get; set; }
+        public class ChatServerStateControl
+        {
+            public HashSet<string> RoomsAvailable { get; set; }
+            public HashSet<string> UsersConnected { get; set; }
+            public Dictionary<string, List<string>> RoomUsers { get; set; }
+            public Dictionary<string, int> UserConnections { get; set; }
+            public int LastConnectionId { get; set; }
+
+            public Dictionary<string, List<ChatEndpoint>> UserEndPoints { get; set; }
+            public Dictionary<string, Socket> EndPointSockets { get; set; }
+            public Dictionary<string, ChatIdentity> UserIdentities { get; set; }
+            public Dictionary<string, ChatIdentity> RoomIdentities { get; set; }
+
+            public void EnsureLookups()
+            {
+                RoomsAvailable ??= new();
+                StateControl.UsersConnected ??= new();
+                RoomUsers ??= new();
+                UserConnections ??= new();
+                EndPointSockets ??= new();
+                UserEndPoints ??= new();
+                UserIdentities ??= new();
+                RoomIdentities ??= new();
+            }
+        }
+        private static ChatServerStateControl StateControl { get; set; }
 
         private static readonly object LockOps = new();
-        public ChatServer()
+        public ChatServer(bool resetState = false)
         {
+            if (resetState)
+            {
+                StateControl = null;
+            }
             EnsureLookups();
         }
         public static void EnsureLookups()
         {
             lock (LockOps)
             {
-                RoomsAvailable ??= new();
-                UsersConnected ??= new();
-                RoomUsers ??= new();
-                UserConnections ??= new();
-                EndPointSockets ??= new();
-                UserEndPoints ??= new();
-                UserIndentities ??= new();
-                RoomIndentities ??= new();
+                StateControl ??= new();
+                StateControl.EnsureLookups();
             }
         }
 
@@ -44,16 +62,16 @@ namespace MauiChatApp.Core.Models
             if (endpoint == null || string.IsNullOrWhiteSpace(endpoint.IpAddress)) { throw new ArgumentNullException(nameof(endpoint), "You must supply an endpoint"); }
             lock (LockOps)
             {
-                if (!UserConnections.TryGetValue(endpoint.ToString(), out int connectionId))
+                if (!StateControl.UserConnections.TryGetValue(endpoint.ToString(), out int connectionId))
                 {
-                    LastConnectionId++;
-                    connectionId = LastConnectionId;
-                    UserConnections.Add(endpoint.ToString(), connectionId);
+                    StateControl.LastConnectionId++;
+                    connectionId = StateControl.LastConnectionId;
+                    StateControl.UserConnections.Add(endpoint.ToString(), connectionId);
                 }
                 //Add User Socket
-                if (socket != null) 
+                if (socket != null)
                 {
-                    EndPointSockets[endpoint.ToString()] = socket;
+                    StateControl.EndPointSockets[endpoint.ToString()] = socket;
                 }
                 return connectionId;
             }
@@ -63,52 +81,52 @@ namespace MauiChatApp.Core.Models
             string Id = endpoint.ToString();
             lock (LockOps)
             {
-                if (UserConnections.TryGetValue(Id, out int value))
+                if (StateControl.UserConnections.TryGetValue(Id, out int value))
                 {
                     return value;
                 }
             }
             return null;
         }
-        public static void ConnectAsUser(ChatIndentity indentity)
+        public static void ConnectAsUser(ChatIdentity identity)
         {
-            if (indentity == null) { throw new ArgumentNullException(nameof(indentity), "You must supply an indentity"); }
-            if (string.IsNullOrWhiteSpace(indentity.Id)) { throw new NullReferenceException("Id is blank."); }
-            if (string.IsNullOrEmpty(indentity.IndentityType) || indentity.IndentityType != ChatIndentity.UserType) { throw new Exception("Only Users can connect to a server"); }
+            if (identity == null) { throw new ArgumentNullException(nameof(identity), "You must supply an identity"); }
+            if (string.IsNullOrWhiteSpace(identity.Id)) { throw new NullReferenceException("Id is blank."); }
+            if (string.IsNullOrEmpty(identity.IdentityType) || identity.IdentityType != ChatIdentity.UserType) { throw new Exception("Only Users can connect to a server"); }
             lock (LockOps)
             {
-                if (!UsersConnected.Contains(indentity.Id))
+                if (!StateControl.UsersConnected.Contains(identity.Id))
                 {
                     //Check is Id is for a User
-                    var check = GetUser(indentity.Id);
-                    if (check != null && check.Id == indentity.Id)
+                    var check = GetUser(identity.Id);
+                    if (check != null && check.Id == identity.Id)
                     {
-                        UsersConnected.Add(indentity.Id);
+                        StateControl.UsersConnected.Add(identity.Id);
                     }
                     else
                     {
                         throw new Exception("User does not exist.");
                     }
                 }
-                else 
+                else
                 {
                     throw new Exception("User already connected.");
                 }
             }
         }
-        public static int ConnectUserIndentity(ChatIndentity chatIndentity, ChatEndpoint endpoint)
+        public static int ConnectUserIdentity(ChatIdentity chatIdentity, ChatEndpoint endpoint)
         {
 
-            if (chatIndentity != null)
+            if (chatIdentity != null)
             {
-                if (!UserEndPoints.TryGetValue(endpoint.ToString(), out List<ChatEndpoint> ueps))
+                if (!StateControl.UserEndPoints.TryGetValue(endpoint.ToString(), out List<ChatEndpoint> ueps))
                 {
                     ueps = new List<ChatEndpoint>();
                 }
                 if (ueps.FirstOrDefault(x => x.ToString() == endpoint.ToString()) == null)
                 {
                     ueps.Add(endpoint);
-                    UserEndPoints[chatIndentity.Id] = ueps;
+                    StateControl.UserEndPoints[chatIdentity.Id] = ueps;
                 }
 
                 return GetConnectionId(endpoint) ?? 0;
@@ -116,11 +134,11 @@ namespace MauiChatApp.Core.Models
             return 0;
         }
 
-        public static ChatIndentity GetUserIndentity(string Id)
+        public static ChatIdentity GetUserIdentity(string Id)
         {
             lock (LockOps)
             {
-                if (UserIndentities.TryGetValue(Id, out ChatIndentity value))
+                if (StateControl.UserIdentities.TryGetValue(Id, out ChatIdentity value))
                 {
                     return value;
                 }
@@ -128,19 +146,19 @@ namespace MauiChatApp.Core.Models
             return null;
         }
 
-        public static ChatIndentity GetRoomIndentity(string Id)
+        public static ChatIdentity GetRoomIdentity(string Id)
         {
             lock (LockOps)
             {
-                if (RoomIndentities.TryGetValue(Id, out ChatIndentity value))
+                if (StateControl.RoomIdentities.TryGetValue(Id, out ChatIdentity value))
                 {
                     //Rebuild Users in Room
                     value.SubIdentities = new();
-                    if (RoomUsers != null && RoomUsers.TryGetValue(Id, out List<string> users))
+                    if (StateControl.RoomUsers != null && StateControl.RoomUsers.TryGetValue(Id, out List<string> users))
                     {
                         foreach (var u in users)
                         {
-                            var user = GetUserIndentity(u);
+                            var user = GetUserIdentity(u);
                             if (user != null) { value.SubIdentities.Add(user); }
                         }
                     }
@@ -155,14 +173,14 @@ namespace MauiChatApp.Core.Models
             lock (LockOps)
             {
 
-                var room = GetRoomIndentity(roomId);
-                if(room != null)
+                var room = GetRoomIdentity(roomId);
+                if (room != null)
                 {
-                    if(room.SubIdentities != null)
+                    if (room.SubIdentities != null)
                     {
-                        foreach (var  u in room.SubIdentities)
+                        foreach (var u in room.SubIdentities)
                         {
-                            if (UserEndPoints != null && UserEndPoints.TryGetValue(u.Id, out List<ChatEndpoint> value))
+                            if (StateControl.UserEndPoints != null && StateControl.UserEndPoints.TryGetValue(u.Id, out List<ChatEndpoint> value))
                             {
                                 rtnVal.Add(u.Id, value);
                             }
@@ -180,11 +198,11 @@ namespace MauiChatApp.Core.Models
                 Dictionary<string, List<ChatEndpoint>> endpoints = GetRoomUserEndPoints(roomId);
                 if (endpoints != null)
                 {
-                    foreach (var kv in endpoints) 
-                    { 
+                    foreach (var kv in endpoints)
+                    {
                         string ep = kv.Value.ToString();
 
-                        if (EndPointSockets != null && EndPointSockets.TryGetValue(ep, out Socket value)) 
+                        if (StateControl.EndPointSockets != null && StateControl.EndPointSockets.TryGetValue(ep, out Socket value))
                         {
                             rtnVal.Add(kv.Key, value);
                         }
@@ -198,7 +216,7 @@ namespace MauiChatApp.Core.Models
         {
             lock (LockOps)
             {
-                if (UserEndPoints != null && UserEndPoints.TryGetValue(userId, out List<ChatEndpoint> value))
+                if (StateControl.UserEndPoints != null && StateControl.UserEndPoints.TryGetValue(userId, out List<ChatEndpoint> value))
                 {
                     return value;
                 }
@@ -236,7 +254,7 @@ namespace MauiChatApp.Core.Models
             {
                 if (endpoint != null)
                 {
-                    if (EndPointSockets != null && EndPointSockets.TryGetValue(endpoint.ToString(), out Socket value))
+                    if (StateControl.EndPointSockets != null && StateControl.EndPointSockets.TryGetValue(endpoint.ToString(), out Socket value))
                     {
                         return value;
                     }
@@ -257,15 +275,15 @@ namespace MauiChatApp.Core.Models
         {
             lock (LockOps)
             {
-                if (RoomsAvailable == null || !RoomsAvailable.Contains(roomId)) { throw new Exception("Room doesn't exist"); }
-                if (RoomUsers.TryGetValue(roomId, out List<string> users))
+                if (StateControl.RoomsAvailable == null || !StateControl.RoomsAvailable.Contains(roomId)) { throw new Exception("Room doesn't exist"); }
+                if (StateControl.RoomUsers.TryGetValue(roomId, out List<string> users))
                 {
 
-                    var user = GetUserIndentity(userId);
+                    var user = GetUserIdentity(userId);
                     if (user != null)
                     {
                         users.Add(userId);
-                        RoomUsers[roomId] = users;
+                        StateControl.RoomUsers[roomId] = users;
                     }
                     else
                     {
@@ -274,83 +292,83 @@ namespace MauiChatApp.Core.Models
                 }
             }
         }
-        public static ChatIndentity UserToChatIndentity(IUserDef userDef, string status = "Connected")
+        public static ChatIdentity UserToChatIdentity(IUserDef userDef, string status = "Connected")
         {
-            return new ChatIndentity()
+            return new ChatIdentity()
             {
                 Id = userDef.UserId,
-                IndentityType = ChatIndentity.UserType,
+                IdentityType = ChatIdentity.UserType,
                 Name = userDef.Name,
                 Status = status
             };
         }
 
-        public static ChatIndentity RoomToChatIndentity(IRoomDef roomDef, string status = "Active")
+        public static ChatIdentity RoomToChatIdentity(IRoomDef roomDef, string status = "Active")
         {
-            return new ChatIndentity()
+            return new ChatIdentity()
             {
                 Id = roomDef.RoomId,
-                IndentityType = ChatIndentity.UserType,
+                IdentityType = ChatIdentity.UserType,
                 Name = roomDef.Name,
                 Status = status,
                 Topic = roomDef.Topic
             };
         }
-        public static List<ChatIndentity> GetIndentities(MessageIndentityRequest indentityRequest)
+        public static List<ChatIdentity> GetIdentities(MessageIdentityRequest identityRequest)
         {
             lock (LockOps)
             {
-                List<ChatIndentity> list = new();
-                if (indentityRequest != null)
+                List<ChatIdentity> list = new();
+                if (identityRequest != null)
                 {
-                    switch (indentityRequest.InquiryType)
+                    switch (identityRequest.InquiryType)
                     {
-                        case MessageIndentityInquiryType.AvailableUsers: //Only For Demo
+                        case MessageIdentityInquiryType.AvailableUsers: //Only For Demo
                             IUserRepository userRepository = new SimpleUserRepository();
                             var users = userRepository.GetUsers();
                             if (users != null)
                             {
-                                List<ChatIndentity> availableUsers = new();
+                                List<ChatIdentity> availableUsers = new();
                                 foreach (var u in users)
                                 {
-                                    if (UsersConnected == null || !UserConnections.ContainsKey(u.UserId))
+                                    if (StateControl.UsersConnected == null || !StateControl.UserConnections.ContainsKey(u.UserId))
                                     {
-                                        availableUsers.Add(UserToChatIndentity(u, "Available"));
+                                        availableUsers.Add(UserToChatIdentity(u, "Available"));
                                     }
                                 }
                                 list.AddRange(availableUsers);
                             }
                             break;
-                        case MessageIndentityInquiryType.CurrentRoom:
-                            if (indentityRequest.Current != null)
+                        case MessageIdentityInquiryType.CurrentRoom:
+                            if (identityRequest.Current != null)
                             {
-                                var currentRoom = GetRoomIndentity(indentityRequest.Current.Id);
+                                var currentRoom = GetRoomIdentity(identityRequest.Current.Id);
                                 if (currentRoom != null)
                                 {
                                     list.Add(currentRoom);
                                 }
                             }
                             break;
-                        case MessageIndentityInquiryType.CurrentUser:
-                            if (indentityRequest.Current != null)
+                        case MessageIdentityInquiryType.CurrentUser:
+                            if (identityRequest.Current != null)
                             {
-                                var currentUser = GetUserIndentity(indentityRequest.Current.Id);
+                                var currentUser = GetUserIdentity(identityRequest.Current.Id);
                                 if (currentUser != null)
                                 {
                                     list.Add(currentUser);
                                 }
                             }
                             break;
-                        case MessageIndentityInquiryType.Rooms:
-                            list.AddRange(RoomIndentities.Values);
+                        case MessageIdentityInquiryType.Rooms:
+                            list.AddRange(StateControl.RoomIdentities.Values);
                             break;
-                        case MessageIndentityInquiryType.Users:
-                            list.AddRange(UserIndentities.Values);
+                        case MessageIdentityInquiryType.Users:
+                            list.AddRange(StateControl.UserIdentities.Values);
                             break;
-                        case MessageIndentityInquiryType.All:
+                        case MessageIdentityInquiryType.All:
                         default:
-                            list.AddRange(UserIndentities.Values);
-                            list.AddRange(RoomIndentities.Values);
+                            list.AddRange(StateControl.UserIdentities.Values);
+                            list.AddRange(StateControl.RoomIdentities.Values);
                             break;
                     }
                 }
@@ -359,9 +377,9 @@ namespace MauiChatApp.Core.Models
         }
         #endregion [ Helpers ]
         #region [ Cache ]
-        private static ChatIndentity GetUser(string Id)
+        private static ChatIdentity GetUser(string Id)
         {
-            if (UserIndentities.TryGetValue(Id, out ChatIndentity value))
+            if (StateControl.UserIdentities.TryGetValue(Id, out ChatIdentity value))
             {
                 return value;
             }
@@ -373,9 +391,9 @@ namespace MauiChatApp.Core.Models
             if (users != null && users.Count == 1)
             {
                 var user = users[0];
-                ChatIndentity indentity = UserToChatIndentity(user);
-                UserIndentities[Id] = indentity;
-                return indentity;
+                ChatIdentity identity = UserToChatIdentity(user);
+                StateControl.UserIdentities[Id] = identity;
+                return identity;
             }
             return null;
         }

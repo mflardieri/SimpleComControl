@@ -8,7 +8,7 @@ namespace MauiChatApp.Core.Models
 {
     public class DisplayMessage
     {
-        public ChatIndentity From {  get; set; }
+        public ChatIdentity From {  get; set; }
         public string Message { get; set; }
     }
 }

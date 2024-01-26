@@ -4,6 +4,6 @@ namespace MauiChatApp.Core.Bases
 {
     public abstract class MessageRequest
     {
-        public ChatIndentity Indentity { get; set; }
+        public ChatIdentity Identity { get; set; }
     }
 }

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace MauiChatApp.Core.Models
 {
-    public class MessagePingResponse : MessageResponse<ChatHopChain>
+    public class MessagePingResponse : MessageResponse<MessagePingData>
     {
         public bool IsComplete { get; set; }
     }

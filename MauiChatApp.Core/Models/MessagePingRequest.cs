@@ -9,26 +9,7 @@ using System.Threading.Tasks;
 
 namespace MauiChatApp.Core.Models
 {
-    public class MessagePingRequest : MessageRequest, IHopChain
+    public class MessagePingRequest : MessagePingData
     {
-        public ChatHopChain HopChain { get; set; }
-
-        public ChatIdentity GetPingedIdentity()
-        {
-            ChatIdentity rtnVal = null;
-
-            if (!ChatHopChain.IdentityMatches(HopChain.Requestor, Identity))
-            {
-                rtnVal = Identity;
-            }
-            else
-            {
-                if (HopChain.IdentityChain != null && HopChain.IdentityChain.Count >= 3)
-                {
-                    rtnVal = HopChain.IdentityChain[2];
-                }
-            }
-            return rtnVal;
-        }
     }
 }

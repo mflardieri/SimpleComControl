@@ -9,13 +9,15 @@ namespace MauiChatApp.Core.Models
 
         public string Message { get; set; }
 
+        public Object MessageAsObject { get; set; }
+
         public int ConnectionId { get; set; }
 
         public string FromEntityId { get; set; }
 
         public string ToEntityId { get; set; }
 
-        public string ToMessageType { get; set; }
+        public int ToMessageType { get; set; }
 
         public int GetConnectionId()
         {
@@ -39,7 +41,7 @@ namespace MauiChatApp.Core.Models
             throw new NotImplementedException();
         }
 
-        public string GetToMessageType()
+        public int GetToMessageType()
         {
             return ToMessageType;
         }

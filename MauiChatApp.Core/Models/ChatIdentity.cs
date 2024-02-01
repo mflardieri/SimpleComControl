@@ -4,11 +4,11 @@ namespace MauiChatApp.Core.Models
 {
     public class ChatIdentity : IComIdentity
     {
-        public const string UserType = "U";
-        public const string RoomType = "R";
+        public const int UserType = 1;
+        public const int RoomType = 9;
         public string Id { get; set; }
         public string Name { get; set; }
-        public string IdentityType { get; set; }
+        public int IdentityType { get; set; }
         public string Status { get; set; }
 
         public string Topic { get; set; }
@@ -25,7 +25,7 @@ namespace MauiChatApp.Core.Models
         {
             return Status;
         }
-        public string GetIdentityType()
+        public int GetIdentityType()
         {
             return IdentityType;
         }

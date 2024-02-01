@@ -1,6 +1,7 @@
 ﻿using MauiChatApp.Core.Interfaces;
 using MauiChatApp.Core.Models;
 using Microsoft.VisualStudio.TestPlatform.ObjectModel.Adapter;
+using SimpleComControl.Core.Enums;
 using SimpleComControl.Core.Helpers;
 using SimpleComControl.Core.Interfaces;
 using System.Text;
@@ -106,10 +107,10 @@ namespace MauiChatApp.Core.Tests
         {
             EnsureUserRepo();
             Assert.IsNotNull(Users);
-            
+
             //Bare bones setup for chat server.
             MyChatServer = new(true);
-            
+
             #region [ ConnectAsUser ]
             string userId = Users.First().UserId;
             ChatIdentity identity = new() { Id = userId, IdentityType = ChatIdentity.UserType };
@@ -307,17 +308,27 @@ namespace MauiChatApp.Core.Tests
             IUserDef pingUser = Users[1];
             ChatIdentity iCurrentUser = ChatServer.UserToChatIdentity(currentUser);
             ChatIdentity iPingUser = ChatServer.UserToChatIdentity(pingUser);
-           
+
             //Register Current User as Client #1
             ChatServer.ConnectAsUser(iCurrentUser);
-            int cIdCurrentUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client._socket.RemoteEndPoint as System.Net.IPEndPoint), Client._socket);
+            int cIdCurrentUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client._socket.LocalEndPoint as System.Net.IPEndPoint), Client._socket);
             Assert.IsTrue(cIdCurrentUser > 0);
 
             //Register Ping User as Client #2
             ChatServer.ConnectAsUser(iPingUser);
-            int cIdPingUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client2._socket.RemoteEndPoint as System.Net.IPEndPoint), Client2._socket);
+            int cIdPingUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client2._socket.LocalEndPoint as System.Net.IPEndPoint), Client2._socket);
             Assert.IsTrue(cIdPingUser > 0);
 
+            int cid = ChatServer.ConnectUserIdentity(iCurrentUser, ChatSocket.ConvertToEndPoint(Client._socket.LocalEndPoint as System.Net.IPEndPoint));
+            Assert.IsTrue(cIdCurrentUser == cid);
+
+            cid = ChatServer.ConnectUserIdentity(iPingUser, ChatSocket.ConvertToEndPoint(Client2._socket.LocalEndPoint as System.Net.IPEndPoint));
+            Assert.IsTrue(cIdPingUser == cid);
+
+
+
+            ChatMessageService.SetConnectionId(cIdCurrentUser);
+            ChatMessageService.SetUserIdentity(iCurrentUser);
             var pingRequest = ChatMessageService.CreatePingMessage(iPingUser, null, iCurrentUser);
 
             //Send Request to Server
@@ -325,6 +336,42 @@ namespace MauiChatApp.Core.Tests
             WaitForMessagesToProcess();
             Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
 
+            var chatMessageService = new ChatMessageService();
+            chatMessageService.ChatWindowId = iCurrentUser.Id;
+            chatMessageService.ProcessIncomingMessages();
+            var q = ChatMessageService.HistoricalDisplayMessages.Where(x => x.MessageType == ComMessageType.Ping || x.MessageType == ComMessageType.PingResponse);
+            var pingMessages = q.ToList();
+            if (pingMessages.Count != 3)
+            {
+                var dt = DateTime.Now;
+                int pingMessageCount = 0;
+                while ((DateTime.Now - dt).TotalSeconds < 2 && pingMessageCount < 3)
+                {
+                    try
+                    {
+                        if (ChatMessageService.HasMessagesToProcess())
+                        {
+                            chatMessageService.ProcessIncomingMessages();
+                        }
+                        pingMessages = q.ToList();
+                        Thread.Sleep(100);
+                    }
+                    catch { }
+                }
+            }
+            Assert.IsTrue(pingMessages.Count == 3);
+            Assert.IsTrue(chatMessageService.DisplayMessages.Count == 0);
+
+            var pingMessageResponse = pingMessages.FirstOrDefault(x => x.ToEntityId == iCurrentUser.Id && x.MessageType == ComMessageType.Ping);
+            Assert.IsNotNull(pingMessageResponse);
+            var pingMessageRequest = pingMessageResponse.Message.FromJson<MessagePingRequest>();
+            Assert.IsNotNull(pingMessageRequest);
+            Assert.IsNotNull(pingMessageRequest.HopChain);
+            Assert.IsNotNull(pingMessageRequest.HopChain.IdentityChain);
+            Assert.IsNotNull(pingMessageRequest.HopChain.Requestor);
+            Assert.AreEqual(5, pingMessageRequest.HopChain.ChainPosition);
+            Assert.AreEqual(iCurrentUser.Id, pingMessageRequest.HopChain.Requestor.Id);
+            Assert.IsTrue(pingMessageRequest.HopChain.IsValidChain(pingMessageRequest.HopChain.Requestor, iCurrentUser, iPingUser));
 
             //Assert.IsTrue(false);
         }

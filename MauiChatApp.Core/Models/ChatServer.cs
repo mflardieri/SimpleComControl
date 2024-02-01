@@ -5,12 +5,8 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 namespace MauiChatApp.Core.Models
 {
-
-
-
     public class ChatServer
-    {
-
+    { 
         public class ChatServerStateControl
         {
             public HashSet<string> RoomsAvailable { get; set; }
@@ -92,7 +88,7 @@ namespace MauiChatApp.Core.Models
         {
             if (identity == null) { throw new ArgumentNullException(nameof(identity), "You must supply an identity"); }
             if (string.IsNullOrWhiteSpace(identity.Id)) { throw new NullReferenceException("Id is blank."); }
-            if (string.IsNullOrEmpty(identity.IdentityType) || identity.IdentityType != ChatIdentity.UserType) { throw new Exception("Only Users can connect to a server"); }
+            if (identity.IdentityType != ChatIdentity.UserType) { throw new Exception("Only Users can connect to a server"); }
             lock (LockOps)
             {
                 if (!StateControl.UsersConnected.Contains(identity.Id))
@@ -396,6 +392,14 @@ namespace MauiChatApp.Core.Models
                 return identity;
             }
             return null;
+        }
+
+        public static bool IsUserConnected(string userId)
+        {
+            lock (LockOps)
+            {
+                return StateControl.UsersConnected.Contains(userId);
+            }
         }
         #endregion [ Cache ]
     }

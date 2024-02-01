@@ -29,7 +29,7 @@ namespace SimpleComControl.Core.Models
             throw new NotImplementedException();
         }
 
-        public string GetToMessageType()
+        public int GetToMessageType()
         {
             throw new NotImplementedException();
         }

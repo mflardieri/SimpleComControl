@@ -66,26 +66,27 @@ namespace MauiChatApp.Core.Models
             };
         }
 
-        public static ChatMessage CreatePingMessage(ChatIdentity ping, ChatHopChain startHop = null, ChatIdentity current = null)
+        public static ChatMessage CreatePingMessage(ChatIdentity toPing, ChatHopChain startHop = null, ChatIdentity requestor = null)
         {
-            current ??= UserIdentity;
-            if (current == null) { throw new ArgumentNullException(nameof(current), "You must supply a current identity."); }
-            if (ping == null) { throw new ArgumentNullException(nameof(ping), "You must supply a identity to ping."); }
+            requestor ??= UserIdentity;
+            if (requestor == null) { throw new ArgumentNullException(nameof(requestor), "You must supply a requestor identity."); }
+            if (toPing == null) { throw new ArgumentNullException(nameof(toPing), "You must supply a identity to ping."); }
 
 
             startHop ??= new();
-            startHop.Requestor = current;
-            if (startHop.ChainPosition > 0 && !startHop.HasNextHop()) { throw new Exception(""); }
-            startHop = startHop.GetNextHop(current, ping);
-            var request = new MessagePingRequest() { Identity = ping, HopChain = startHop };
+            startHop.Requestor = requestor;
+            if (startHop.ChainPosition > 0 && !startHop.HasNextHop()) { throw new Exception("Does not have a next hop"); }
+            if (startHop.ChainPosition == 0) { startHop = startHop.GetNextHop(requestor, toPing); }
+            var request = new MessagePingRequest() { Identity = toPing, HopChain = startHop };
 
             return new ChatMessage()
             {
                 ConnectionId = UserConnectionId,
                 FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
-                ToEntityId = ping.Id,
+                ToEntityId = toPing.Id,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.Ping,
-                Message = request.ToJson(false)
+                Message = request.ToJson(false),
+                ToMessageType = toPing.IdentityType
             };
         }
 

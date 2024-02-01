@@ -9,7 +9,7 @@ namespace SimpleComControl.Core.Interfaces
         public string GetMessageBody();
         public IComIdentity GetFromIdentity();
         public IComIdentity GetToIdentity();
-        public string GetToMessageType();
+        public int GetToMessageType();
 
         public bool IsValid();
     }

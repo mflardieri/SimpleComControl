@@ -5,7 +5,7 @@
         public object GetIdentityId();
         public string GetIdentityName();
         public string GetIdentityStatus();
-        public string GetIdentityType();
+        public int GetIdentityType();
 
         public List<IComIdentity> GetSubIdentities();
     }

@@ -14,7 +14,7 @@ namespace DemoServer
             try
             {
                 comTs.Start(serverIP, serverPort);
-                while (comTs.isRunning)
+                while (comTs.IsRunning)
                 {
                     Console.WriteLine("Enter Text or type '/E' to exit: ");
                     string? input = Console.ReadLine();

@@ -1,21 +1,32 @@
 ﻿using SimpleComControl.Core.Enums;
 using SimpleComControl.Core.Interfaces;
 
-namespace SimpleComControl.Core.Models
+namespace MauiChatApp.Core.Models
 {
-    public class SimpleComMessage : IComMessage
+    public class ChatMessage : IComMessage
     {
         public ComMessageType MessageType { get; set; }
 
         public string Message { get; set; }
 
+        public Object MessageAsObject { get; set; }
+
+        public int ConnectionId { get; set; }
+
+        public string FromEntityId { get; set; }
+
+        public string ToEntityId { get; set; }
+
+        public int ToMessageType { get; set; }
+
         public int GetConnectionId()
         {
-            throw new NotImplementedException();
+            return ConnectionId;
         }
 
         public IComIdentity GetFromIdentity()
         {
+            //Cache Repo
             throw new NotImplementedException();
         }
 
@@ -26,17 +37,19 @@ namespace SimpleComControl.Core.Models
 
         public IComIdentity GetToIdentity()
         {
+            //Cache Repo
             throw new NotImplementedException();
         }
 
         public int GetToMessageType()
         {
-            throw new NotImplementedException();
+            return ToMessageType;
         }
 
         public bool IsValid()
         {
-            //
+            //TODO Add Validation
+
             return true;
         }
     }

@@ -29,7 +29,7 @@ namespace DemoClient
                         else
                         {
                             SimpleComMessage comMessage = new SimpleComMessage();
-                            comMessage.message = input;
+                            comMessage.Message = input;
                             client.Send(comMessage); // Send Message to Server
                             //client.Receive(); //Receive Message from Service
                         }

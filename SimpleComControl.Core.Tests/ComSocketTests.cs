@@ -11,30 +11,30 @@ namespace SimpleComControl.Core.Tests
         public void ComSocketServerConnectTest()
         {
             TextWriter textWriter = Console.Out;
-            StringWriter sw = new StringWriter();
+            StringWriter sw = new();
             Console.SetOut(sw);
 
             string messageToSend = "Hello world!";
             string ipAddress = "127.0.0.1";
-            int serverPort = 0;
-            int clientPort = 0;
+            int serverPort = ComSocketHelper.TcpOpenPort();
             //Get Available Port for server;
-            serverPort = ComSocketHelper.TcpOpenPort();
 
-            SimpleTCPServer server = new SimpleTCPServer();
-            SimpleTCPClient client = new SimpleTCPClient();
+            SimpleTCPServer server = new();
+            SimpleTCPClient client = new();
             try
             {
                 //start the server
                 server.Start(ipAddress, serverPort);
                 
                 //get the client port
-                clientPort = ComSocketHelper.TcpOpenPort();
+                int clientPort = ComSocketHelper.TcpOpenPort();
                 //start the client
                 client.Start(ipAddress, clientPort, ipAddress, serverPort);
 
-                SimpleComMessage message = new SimpleComMessage();
-                message.message = messageToSend;
+                SimpleComMessage message = new()
+                {
+                    Message = messageToSend
+                };
 
                 client.Send(message);
                 //Wait for server to listen and process
@@ -42,7 +42,7 @@ namespace SimpleComControl.Core.Tests
             }
             catch (Exception ex)
             {
-
+                Console.WriteLine(ex.ToString());
             }
            
             string? consoleout = sw.ToString();

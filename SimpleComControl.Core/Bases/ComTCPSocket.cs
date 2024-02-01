@@ -1,73 +1,82 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Sockets;
+﻿using SimpleComControl.Core.Interfaces;
 using System.Net;
-using System.Text;
-using System.Threading.Tasks;
-using SimpleComControl.Core.Interfaces;
+using System.Net.Sockets;
 
 namespace SimpleComControl.Core.Bases
 {
     public abstract class ComTCPSocket
     {
-        public Socket _socket;
+        public Socket? _socket;
         private const int bufSize = 8 * 1024;
-        private State state = new State();
-        private EndPoint epFrom = new IPEndPoint(IPAddress.Any, 0);
-        private IComMessageHandler _comMessageHandler { get; set; }
-     
+        private readonly State state = new();
+        //private EndPoint epFrom = new IPEndPoint(IPAddress.Any, 0);
+        private IComMessageHandler ComMessageHandler { get; set; }
+
         public ComTCPSocket(IComMessageHandler comMessageHandler)
         {
             //_encoding = Encoding.ASCII;
-            _comMessageHandler = comMessageHandler;
+            ComMessageHandler = comMessageHandler;
         }
-     
+
         public class State
         {
             public byte[] buffer = new byte[bufSize];
         }
-        public bool Send(IComMessage comMessage
-                         )
-        {
 
+        public bool Send(IComMessage comMessage)
+        {
+            bool rtnVal = false;
+            if (_socket != null)
+            {
+                rtnVal = Send(comMessage, _socket);
+            }
+            return rtnVal;
+
+        }
+
+
+        public bool Send(IComMessage comMessage, Socket targetSocket)
+        {
             bool rtnVal = false;
 
-            byte[] data = _comMessageHandler.Convert(comMessage);
+            byte[] data = ComMessageHandler.Convert(comMessage);
 
-     
-            IPEndPoint ep = (IPEndPoint)_socket.RemoteEndPoint;
-            try
+            if (targetSocket != null && targetSocket.RemoteEndPoint != null && targetSocket.RemoteEndPoint is IPEndPoint ep)
             {
-
-                _socket.BeginSendTo(data, 0, data.Length, SocketFlags.None, ep, (ar) =>
+                try
                 {
-                    State so = (State)ar.AsyncState;
-                    int bytes = _socket.EndSend(ar);
-                    rtnVal = true;
-                }, state);
-
+                    if (ep != null)
+                    {
+                        targetSocket.BeginSendTo(data, 0, data.Length, SocketFlags.None, ep, (ar) =>
+                        {
+                            int bytes = targetSocket.EndSend(ar);
+                            rtnVal = true;
+                        }, state);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Failed to send {ex.Message}");
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Failed to send {ex.Message}");
-            }
-            return false;
+            return rtnVal;
         }
 
         public void Receive(Socket? targetSocket = null)
         {
-            if (targetSocket == null) { targetSocket = _socket; }
-            int bytes = 0;
-            bytes = targetSocket.Receive(state.buffer, SocketFlags.None);
-            if (bytes > 0)
+            targetSocket ??= _socket;
+            if (targetSocket != null)
             {
-                var msg = _comMessageHandler.Convert(state.buffer, bytes);
-                if (msg != null && msg.IsValid())
+                int bytes = targetSocket.Receive(state.buffer, SocketFlags.None);
+                if (bytes > 0)
                 {
-                    _comMessageHandler.ProcessMessage(this, targetSocket, msg);
+                    var msg = ComMessageHandler.Convert(state.buffer, bytes);
+                    if (msg != null && msg.IsValid())
+                    {
+                        ComMessageHandler.ProcessMessage(this, targetSocket, msg);
+                    }
                 }
-             }
+            }
         }
     }
 }

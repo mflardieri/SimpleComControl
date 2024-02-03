@@ -9,5 +9,6 @@ namespace MauiChatApp.Core.Models
         ///This class will be for the follow up of choosing the identity.
         ///All Requests must have an identify as User.
         public bool ConnectAs { get; set; }
+        public ChatIdentity RoomConnect { get; set; }
     }
 }

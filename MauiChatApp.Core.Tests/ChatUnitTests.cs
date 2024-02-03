@@ -192,6 +192,7 @@ namespace MauiChatApp.Core.Tests
             Assert.IsTrue(Client.IsRunning);
             //Simulate Message Sent
             var testMessage = ChatMessageService.CreateNewTestRequest();
+            Assert.IsTrue(!string.IsNullOrEmpty(testMessage.TagId));
             Client.Send(testMessage);
             WaitForMessagesToProcess();
             Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
@@ -207,6 +208,7 @@ namespace MauiChatApp.Core.Tests
             Assert.IsTrue(Client.IsRunning);
             //Simulate Message Sent
             var identityInfoRequest = ChatMessageService.CreateNewIdentityRequest(Enums.MessageIdentityInquiryType.AvailableUsers);
+            Assert.IsTrue(!string.IsNullOrEmpty(identityInfoRequest.TagId));
             Client.Send(identityInfoRequest);
             WaitForMessagesToProcess();
             Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
@@ -227,14 +229,33 @@ namespace MauiChatApp.Core.Tests
             EnsureServerClientSetup(resetChatServer: true);
             Assert.IsNotNull(Client);
             Assert.IsTrue(Client.IsRunning);
+            Assert.IsNotNull(Client._socket);
+
+            EnsureClient2Setup();
+            Assert.IsNotNull(Client2);
+            Assert.IsTrue(Client2.IsRunning);
+            Assert.IsNotNull(Client2._socket);
+
             EnsureUserRepo();
             Assert.IsNotNull(Users);
 
-            string userIdExist = Users.First().UserId;
+            var userExist = ChatServer.UserToChatIdentity(Users.First());
+
+            //Register Existing User as Client #2
+            ChatServer.ConnectAsUser(userExist);
+            int cIdUserExist = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client2._socket.LocalEndPoint as System.Net.IPEndPoint), Client2._socket);
+            Assert.IsTrue(cIdUserExist > 0);
+
+            int cid = ChatServer.ConnectUserIdentity(userExist, ChatSocket.ConvertToEndPoint(Client2._socket.LocalEndPoint as System.Net.IPEndPoint));
+            Assert.IsTrue(cIdUserExist == cid);
+
+
+
             string userId = Users[1].UserId;
             ChatIdentity identity = new() { Id = userId, IdentityType = ChatIdentity.UserType };
 
-            var connectRequest = ChatMessageService.CreateNewConnectRequest(true, identity);
+            var connectRequest = ChatMessageService.CreateNewConnectRequest(true, current: identity);
+            Assert.IsTrue(!string.IsNullOrEmpty(connectRequest.TagId));
             //Connect as User initially
             Client.Send(connectRequest);
             WaitForMessagesToProcess();
@@ -268,8 +289,9 @@ namespace MauiChatApp.Core.Tests
 
 
             //Connect with connection id as Identity
-            connectRequest = ChatMessageService.CreateNewConnectRequest(false, identity);
+            connectRequest = ChatMessageService.CreateNewConnectRequest(false, current: identity);
             connectRequest.ConnectionId = connectionId;
+            Assert.IsTrue(!string.IsNullOrEmpty(connectRequest.TagId));
             Client.Send(connectRequest);
             WaitForMessagesToProcess();
             Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
@@ -282,8 +304,73 @@ namespace MauiChatApp.Core.Tests
             Console.WriteLine(connectResponse.ErrorMessage);
             Assert.IsTrue(connectResponse.Result == connectionId);
             Assert.IsTrue(connectResponse.IsSuccess);
+            ChatMessageService.HistoricalDisplayMessages.Clear();
+
+            //Connect to a room
+            ChatMessageService.SetUserIdentity(identity);
+            ChatMessageService.SetConnectionId(connectionId);
+            IRoomRepository roomRepository = new SimpleRoomRepository();
+            var room = ChatServer.RoomToChatIdentity(roomRepository.GetRooms(x=>!string.IsNullOrEmpty(x.RoomId))[0]);
+            connectRequest = ChatMessageService.CreateConnectToRoomRequest(room,identity);
+            connectRequest.ConnectionId = connectionId;
+            Assert.IsTrue(!string.IsNullOrEmpty(connectRequest.TagId));
+            Client.Send(connectRequest);
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+            chatMessageService.ProcessIncomingMessages();
+
+            connectResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.ConnectedMessage);
+            Assert.IsNotNull(connectResponseMessage);
+            connectResponse = connectResponseMessage.Message.FromJson<MessageConnectResponse>();
+            Assert.IsNotNull(connectResponse);
+            Console.WriteLine(connectResponse.ErrorMessage);
+            Assert.IsTrue(connectResponse.Result == connectionId);
+            Assert.IsNotNull(connectResponse.RoomRef);
+            Assert.AreEqual("0", connectResponse.RoomRef.Id);
+            Assert.IsTrue(connectResponse.RoomRef.SubIdentities.FirstOrDefault(x => x.Id == identity.Id) != null);
+            Assert.IsTrue(connectResponse.IsSuccess);
+            ChatMessageService.HistoricalDisplayMessages.Clear();
 
 
+            //Disconnect from Room
+            var disConnectRequest = ChatMessageService.CreateDisconnectFromRoomRequest(room, identity);
+            disConnectRequest.ConnectionId = connectionId;
+            Assert.IsTrue(!string.IsNullOrEmpty(connectRequest.TagId));
+            Client.Send(disConnectRequest);
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+            chatMessageService.ProcessIncomingMessages();
+
+            connectResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.DisconnectedMessage);
+            Assert.IsNotNull(connectResponseMessage);
+            connectResponse = connectResponseMessage.Message.FromJson<MessageConnectResponse>();
+            Assert.IsNotNull(connectResponse);
+            Console.WriteLine(connectResponse.ErrorMessage);
+            Assert.IsTrue(connectResponse.Result == connectionId);
+            Assert.IsNotNull(connectResponse.RoomRef);
+            Assert.AreEqual("0", connectResponse.RoomRef.Id);
+            Assert.IsTrue(connectResponse.RoomRef.SubIdentities.FirstOrDefault(x => x.Id == identity.Id) == null);
+            Assert.IsTrue(connectResponse.IsSuccess);
+            ChatMessageService.HistoricalDisplayMessages.Clear();
+
+            //Disconnect from Server
+            disConnectRequest = ChatMessageService.CreateDisconnectRequest(identity);
+            disConnectRequest.ConnectionId = connectionId;
+            Assert.IsTrue(!string.IsNullOrEmpty(connectRequest.TagId));
+            Client.Send(disConnectRequest);
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+            chatMessageService.ProcessIncomingMessages();
+
+            connectResponseMessage = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.MessageType == SimpleComControl.Core.Enums.ComMessageType.DisconnectedMessage);
+            Assert.IsNotNull(connectResponseMessage);
+            connectResponse = connectResponseMessage.Message.FromJson<MessageConnectResponse>();
+            Assert.IsNotNull(connectResponse);
+            Console.WriteLine(connectResponse.ErrorMessage);
+            Assert.IsTrue(connectResponse.Result == connectionId);
+            Assert.IsTrue(connectResponse.IsSuccess);
+            Assert.IsFalse(ChatServer.IsUserConnected(userId));
+            ChatMessageService.HistoricalDisplayMessages.Clear();
         }
 
         [TestMethod]
@@ -330,7 +417,7 @@ namespace MauiChatApp.Core.Tests
             ChatMessageService.SetConnectionId(cIdCurrentUser);
             ChatMessageService.SetUserIdentity(iCurrentUser);
             var pingRequest = ChatMessageService.CreatePingMessage(iPingUser, null, iCurrentUser);
-
+            Assert.IsTrue(!string.IsNullOrEmpty(pingRequest.TagId));
             //Send Request to Server
             Client.Send(pingRequest);
             WaitForMessagesToProcess();
@@ -374,6 +461,68 @@ namespace MauiChatApp.Core.Tests
             Assert.IsTrue(pingMessageRequest.HopChain.IsValidChain(pingMessageRequest.HopChain.Requestor, iCurrentUser, iPingUser));
 
             //Assert.IsTrue(false);
+        }
+        [TestMethod]
+        public void TestClientResponseMessage()
+        {
+            //Ping: Client #1  -> To Server -> To Client #2 -> To Server -> To Client #1
+            //Custom Message type to control server direction and hops.
+            EnsureServerClientSetup(resetChatServer: true);
+            Assert.IsNotNull(Client);
+            Assert.IsTrue(Client.IsRunning);
+            Assert.IsNotNull(Client._socket);
+            EnsureClient2Setup();
+            Assert.IsNotNull(Client2);
+            Assert.IsTrue(Client2.IsRunning);
+            Assert.IsNotNull(Client2._socket);
+
+
+            EnsureUserRepo();
+            Assert.IsNotNull(Users);
+            Assert.IsTrue(Users.Count > 1);
+            IUserDef currentUser = Users[0];
+            IUserDef toUser = Users[1];
+            ChatIdentity iFromUser = ChatServer.UserToChatIdentity(currentUser);
+            ChatIdentity iToUser = ChatServer.UserToChatIdentity(toUser);
+
+            //Register Current User as Client #1
+            ChatServer.ConnectAsUser(iFromUser);
+            int cIdFromUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client._socket.LocalEndPoint as System.Net.IPEndPoint), Client._socket);
+            Assert.IsTrue(cIdFromUser > 0);
+
+            //Register Ping User as Client #2
+            ChatServer.ConnectAsUser(iToUser);
+            int cIdToUser = ChatServer.ConnectSession(ChatSocket.ConvertToEndPoint(Client2._socket.LocalEndPoint as System.Net.IPEndPoint), Client2._socket);
+            Assert.IsTrue(cIdToUser > 0);
+
+            int cid = ChatServer.ConnectUserIdentity(iFromUser, ChatSocket.ConvertToEndPoint(Client._socket.LocalEndPoint as System.Net.IPEndPoint));
+            Assert.IsTrue(cIdFromUser == cid);
+
+            cid = ChatServer.ConnectUserIdentity(iToUser, ChatSocket.ConvertToEndPoint(Client2._socket.LocalEndPoint as System.Net.IPEndPoint));
+            Assert.IsTrue(cIdToUser == cid);
+
+            ChatMessageService.SetConnectionId(cIdFromUser);
+            ChatMessageService.SetUserIdentity(iFromUser);
+            var clientRequest = ChatMessageService.CreateClientMessage(iToUser, "Hi, Testing!!!");
+            Assert.IsTrue(!string.IsNullOrEmpty(clientRequest.TagId));
+            //Send Request to Server
+            Client.Send(clientRequest);
+
+
+            WaitForMessagesToProcess();
+            Assert.IsTrue(ChatMessageService.HasMessagesToProcess());
+
+            var chatMessageService = new ChatMessageService();
+            chatMessageService.ChatWindowId = iFromUser.Id;
+            chatMessageService.ProcessIncomingMessages();
+
+            var fromResponse = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.ToEntityId == iFromUser.Id && x.MessageType == ComMessageType.ReceivedMessage);
+            Assert.IsNotNull(fromResponse);
+
+            var toResponse = ChatMessageService.HistoricalDisplayMessages.FirstOrDefault(x => x.ToEntityId == iToUser.Id && x.MessageType == ComMessageType.ReceivedMessage);
+            Assert.IsNotNull(toResponse);
+
+
         }
         #region [ Test Helpers ]
         public void EnsureServerClientSetup(bool forceServer = false, bool resetChatServer = false, bool forceClientSetup = false)

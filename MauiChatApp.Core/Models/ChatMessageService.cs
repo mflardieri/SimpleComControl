@@ -1,6 +1,7 @@
 ﻿using MauiChatApp.Core.Enums;
 using SimpleComControl.Core.Helpers;
 using SimpleComControl.Core.Interfaces;
+using System.Net.NetworkInformation;
 
 namespace MauiChatApp.Core.Models
 {
@@ -26,6 +27,11 @@ namespace MauiChatApp.Core.Models
         {
             UserIdentity = userIdentity;
         }
+
+        public static string NewTagId(string Id)
+        {
+            return $"{Id}:{Guid.NewGuid():D}";
+        }
         public static ChatMessage CreateNewIdentityRequest(MessageIdentityInquiryType inquiryType, ChatIdentity current = null)
         {
             var request = new MessageIdentityRequest() { Identity = UserIdentity, Current = current, InquiryType = inquiryType };
@@ -33,6 +39,7 @@ namespace MauiChatApp.Core.Models
             {
                 ConnectionId = UserConnectionId,
                 FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
                 ToEntityId = IComMessageHandler.ServerId,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.IdentityInfo,
                 Message = request.ToJson(false)
@@ -45,6 +52,7 @@ namespace MauiChatApp.Core.Models
             {
                 ConnectionId = UserConnectionId,
                 FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
                 ToEntityId = IComMessageHandler.ServerId,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.TestMessage,
                 Message = request.ToJson(false)
@@ -60,12 +68,60 @@ namespace MauiChatApp.Core.Models
             {
                 ConnectionId = UserConnectionId,
                 FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
                 ToEntityId = IComMessageHandler.ServerId,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.Connnect,
                 Message = request.ToJson(false)
             };
         }
+        public static ChatMessage CreateConnectToRoomRequest(ChatIdentity room, ChatIdentity current = null)
+        {
+            current ??= UserIdentity;
 
+            var request = new MessageConnectRequest() { RoomConnect = room, Identity = current };
+
+            return new ChatMessage()
+            {
+                ConnectionId = UserConnectionId,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
+                ToEntityId = IComMessageHandler.ServerId,
+                MessageType = SimpleComControl.Core.Enums.ComMessageType.Connnect,
+                Message = request.ToJson(false)
+            };
+        }
+        public static ChatMessage CreateDisconnectRequest(ChatIdentity current = null)
+        {
+            current ??= UserIdentity;
+
+            var request = new MessageDisconnectRequest() { DisconnectAs = true, Identity = current };
+
+            return new ChatMessage()
+            {
+                ConnectionId = UserConnectionId,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
+                ToEntityId = IComMessageHandler.ServerId,
+                MessageType = SimpleComControl.Core.Enums.ComMessageType.Disconnect,
+                Message = request.ToJson(false)
+            };
+        }
+        public static ChatMessage CreateDisconnectFromRoomRequest(ChatIdentity room, ChatIdentity current = null)
+        {
+            current ??= UserIdentity;
+
+            var request = new MessageDisconnectRequest() { RoomDisconnect = room, Identity = current };
+
+            return new ChatMessage()
+            {
+                ConnectionId = UserConnectionId,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
+                ToEntityId = IComMessageHandler.ServerId,
+                MessageType = SimpleComControl.Core.Enums.ComMessageType.Disconnect,
+                Message = request.ToJson(false)
+            };
+        }
         public static ChatMessage CreatePingMessage(ChatIdentity toPing, ChatHopChain startHop = null, ChatIdentity requestor = null)
         {
             requestor ??= UserIdentity;
@@ -83,14 +139,34 @@ namespace MauiChatApp.Core.Models
             {
                 ConnectionId = UserConnectionId,
                 FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
                 ToEntityId = toPing.Id,
                 MessageType = SimpleComControl.Core.Enums.ComMessageType.Ping,
                 Message = request.ToJson(false),
                 ToMessageType = toPing.IdentityType
             };
         }
+        public static ChatMessage CreateClientMessage(ChatIdentity toUser, string message, string roomId = "")
+        {
+            if (UserIdentity == null) { throw new ArgumentNullException(nameof(UserIdentity), "You must supply a requestor identity."); }
+            
+            var request = new ChatMessageRequest<DisplayMessage>()
+            {
+                Identity = toUser,
+                Data = new DisplayMessage(UserIdentity, message, roomId)
+            };
 
-
+            return new ChatMessage()
+            {
+                ConnectionId = UserConnectionId,
+                FromEntityId = UserIdentity == null ? "" : UserIdentity.Id,
+                TagId = NewTagId(UserIdentity == null ? "" : UserIdentity.Id),
+                ToEntityId = toUser.Id,
+                MessageType = SimpleComControl.Core.Enums.ComMessageType.SentMessage,
+                Message = request.ToJson(false),
+                ToMessageType = ChatIdentity.UserType//toUser.IdentityType
+            };
+        }
         public static bool HasMessagesToProcess()
         {
             return IncomingMessages?.Count > 0;

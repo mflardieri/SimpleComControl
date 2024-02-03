@@ -1,15 +1,10 @@
-﻿using Microsoft.Maui.Platform;
-using SimpleComControl.Core.Bases;
+﻿using SimpleComControl.Core.Bases;
 using SimpleComControl.Core.Enums;
 using SimpleComControl.Core.Helpers;
 using SimpleComControl.Core.Interfaces;
-using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading.Tasks.Sources;
-using System.Xml;
 
 namespace MauiChatApp.Core.Models
 {
@@ -26,6 +21,7 @@ namespace MauiChatApp.Core.Models
                 pc.Write((int)cMessage.MessageType);
                 pc.Write(cMessage.ConnectionId);
                 pc.Write(cMessage.FromEntityId, encoding);
+                pc.Write(cMessage.TagId, encoding);
                 pc.Write(cMessage.ToEntityId, encoding);
                 pc.Write(cMessage.ToMessageType);
                 pc.Write(cMessage.Message, encoding);
@@ -51,6 +47,7 @@ namespace MauiChatApp.Core.Models
             cMessage.MessageType = (ComMessageType)pc.ReadInt();
             cMessage.ConnectionId = pc.ReadInt();
             cMessage.FromEntityId = pc.ReadString(encoding);
+            cMessage.TagId = pc.ReadString(encoding);
             cMessage.ToEntityId = pc.ReadString(encoding);
             cMessage.ToMessageType = pc.ReadInt();
             cMessage.Message = pc.ReadString(encoding);
@@ -124,7 +121,18 @@ namespace MauiChatApp.Core.Models
                                         {
                                             throw new Exception("Connnection is bad.");
                                         }
-
+                                        //Connect to Room
+                                        if (connectRequest.RoomConnect != null)
+                                        {
+                                            //Ensure Room is registered
+                                            EnsureIsRoomRegistered(connectRequest.RoomConnect);
+                                            //Add the user to the room and return the response
+                                            if (IsServer)
+                                            {
+                                                ChatServer.AddUserToRoom(connectRequest.RoomConnect.Id, message.FromEntityId);
+                                                connectedResponse.RoomRef = ChatServer.GetRoomIdentity(connectRequest.RoomConnect.Id);
+                                            }
+                                        }
                                         //Formulate response
                                         connectedResponse.IsSuccess = true;
                                         connectedResponse.Status = Enums.MessageResponseStatus.Success;
@@ -144,6 +152,46 @@ namespace MauiChatApp.Core.Models
                             connectedResponse.Status = Enums.MessageResponseStatus.Error;
                         }
                         rtnVal = connectedResponse;
+                        break;
+                    case ComMessageType.Disconnect:
+                        var disconnectRequest = message.Message.FromJson<MessageDisconnectRequest>();
+                        var disconnectedResponse = new MessageConnectResponse();
+                        try
+                        {
+
+                            EnsureIsValidConnection(message, IsServer, fromCEP);
+
+                            if (disconnectRequest != null)
+                            {
+
+                                var connectedIdentity = ChatServer.GetUserIdentity(disconnectRequest.Identity.Id);
+                                if (connectedIdentity != null)
+                                {
+                                    int connectId = 0;
+                                    if (disconnectRequest.DisconnectAs)
+                                    {
+                                        connectId = ChatServer.DisconnectAsUser(disconnectRequest.Identity);
+                                    }
+                                    else if (disconnectRequest.RoomDisconnect != null)
+                                    {
+                                        connectId = ChatServer.GetConnectionId(fromCEP).GetValueOrDefault();
+                                        ChatServer.RemoveUserFromRoom(disconnectRequest.RoomDisconnect.Id, disconnectRequest.Identity.Id);
+                                        disconnectedResponse.RoomRef = ChatServer.GetRoomIdentity(disconnectRequest.RoomDisconnect.Id);
+                                    }
+                                    //Formulate response
+                                    disconnectedResponse.IsSuccess = true;
+                                    disconnectedResponse.Status = Enums.MessageResponseStatus.Success;
+                                    disconnectedResponse.Result = connectId;
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            disconnectedResponse.ErrorMessage = ex.Message;
+                            disconnectedResponse.IsSuccess = false;
+                            disconnectedResponse.Status = Enums.MessageResponseStatus.Error;
+                        }
+                        rtnVal = disconnectedResponse;
                         break;
                     case ComMessageType.Ping:
                         var pingRequest = message.Message.FromJson<MessagePingRequest>();
@@ -231,9 +279,51 @@ namespace MauiChatApp.Core.Models
                         { }
                         rtnVal = pingedRequest;
                         break;
+
+                    case ComMessageType.SentMessage:
+                        var clientRequest = message.Message.FromJson<ChatMessageRequest<DisplayMessage>>();
+                        var clientResponse = new ChatMessageResponse<DisplayMessage>();
+
+                        try
+                        {
+                            if (clientRequest == null || clientRequest.Data == null) { throw new Exception("Invalid Message"); }
+                            clientRequest.Data.EnsureMessageIsValid();
+                            EnsureIsValidConnection(message, IsServer, fromCEP);
+
+                            //Check if ToUser is currently connected to server
+                            if (clientRequest.Identity.IdentityType == ChatIdentity.UserType)
+                            {
+                                EnsureIsUserRegistered(clientRequest.Identity);
+                            }
+                            else if (clientRequest.Identity.IdentityType == ChatIdentity.RoomType)
+                            {
+                                EnsureIsRoomRegistered(clientRequest.Identity);
+                            }
+                            clientResponse.Status = Enums.MessageResponseStatus.Success;
+                            clientResponse.IsSuccess = true;
+                        }
+                        catch (Exception ex)
+                        {
+                            clientResponse.ErrorMessage = ex.Message;
+                            clientResponse.IsSuccess = false;
+                            clientResponse.Status = Enums.MessageResponseStatus.Error;
+                        }
+                        rtnVal = clientResponse;
+                        break;
+
                 }
             }
             return rtnVal;
+        }
+        private static void EnsureIsUserRegistered(ChatIdentity user)
+        {
+            if (user == null || user.IdentityType != ChatIdentity.UserType) { throw new ArgumentNullException(nameof(user), "You must supply a user to check."); }
+            if (!ChatServer.IsUserConnected(user.Id)) { throw new Exception("User is not connected."); }
+        }
+        private static void EnsureIsRoomRegistered(ChatIdentity room)
+        {
+            if (room == null || room.IdentityType != ChatIdentity.RoomType) { throw new ArgumentNullException(nameof(room), "You must supply a room to check."); }
+
         }
         private static void EnsureIsValidConnection(ChatMessage message, bool IsServer, ChatEndpoint chatEndpoint)
         {
@@ -277,6 +367,7 @@ namespace MauiChatApp.Core.Models
                 object returnMessage = GetSubMessageType(socket, message, IsServer);
                 rtnVal.FromEntityId = message.FromEntityId;
                 rtnVal.ConnectionId = message.ConnectionId;
+                rtnVal.TagId = message.TagId;
                 rtnVal.MessageAsObject = returnMessage;
                 rtnVal.Message = returnMessage.ToJson(false);
                 switch (message.MessageType)
@@ -301,8 +392,11 @@ namespace MauiChatApp.Core.Models
                         break;
                     case ComMessageType.Connnect:
                         //Get Information about Connection
-                        rtnVal.FromEntityId = IComMessageHandler.ServerId;
+                        //rtnVal.FromEntityId = IComMessageHandler.ServerId;
                         rtnVal.MessageType = ComMessageType.ConnectedMessage;
+                        break;
+                    case ComMessageType.Disconnect:
+                        rtnVal.MessageType = ComMessageType.DisconnectedMessage;
                         break;
                     case ComMessageType.Ping:
                         //Once Connection is made.
@@ -312,8 +406,11 @@ namespace MauiChatApp.Core.Models
                         //Once Connection is made.
                         rtnVal.MessageType = ComMessageType.Ping;
                         break;
+                    case ComMessageType.SentMessage:
+                        //Once Connection is made.
+                        rtnVal.MessageType = ComMessageType.ReceivedMessage;
+                        break;
                     //case ComMessageType.Disconnect:
-                    //case ComMessageType.SentMessage:
                     #endregion [Requests to the Server ]
                     default:
                         throw new NotImplementedException("Message Type not Implemented");
@@ -347,8 +444,59 @@ namespace MauiChatApp.Core.Models
                         {
                             case ComMessageType.IdentityInfo:
                             case ComMessageType.TestMessage:
-                            case ComMessageType.Connnect:
                                 endpoints.Add(chatMessage.FromEntityId, new List<ChatEndpoint>() { fromCEP });
+                                break;
+                            case ComMessageType.Connnect:
+                                if (returnMessage.MessageAsObject is MessageConnectResponse connectResponse)
+                                {
+                                    if (connectResponse.RoomRef != null)
+                                    {
+                                        var connectRoomEndpoints = ChatServer.GetRoomUserEndPoints(connectResponse.RoomRef.Id);
+                                        if (connectRoomEndpoints != null)
+                                        {
+                                            foreach (var connectRoomEndpoint in connectRoomEndpoints)
+                                            {
+                                                endpoints.Add(connectRoomEndpoint.Key, connectRoomEndpoint.Value);
+                                            }
+                                        }
+                                    }
+                                    if (!endpoints.ContainsKey(chatMessage.FromEntityId))
+                                    {
+                                        endpoints.Add(chatMessage.FromEntityId, new List<ChatEndpoint>() { fromCEP });
+                                    }
+                                }
+                                break;
+                            case ComMessageType.Disconnect:
+                                if (returnMessage.MessageAsObject is MessageConnectResponse disconnectResponse)
+                                {
+                                    //Send Message to other endpoint to update the room properties
+                                    if (disconnectResponse.RoomRef != null)
+                                    {
+                                        var connectRoomEndpoints = ChatServer.GetRoomUserEndPoints(disconnectResponse.RoomRef.Id);
+                                        if (connectRoomEndpoints != null)
+                                        {
+                                            foreach (var connectRoomEndpoint in connectRoomEndpoints)
+                                            {
+                                                endpoints.Add(connectRoomEndpoint.Key, connectRoomEndpoint.Value);
+                                            }
+                                        }
+                                        if (!endpoints.ContainsKey(chatMessage.FromEntityId))
+                                        {
+                                            endpoints.Add(chatMessage.FromEntityId, new List<ChatEndpoint>() { fromCEP });
+                                        }
+                                    }
+                                    else
+                                    {
+                                        var serverEndpoints = ChatServer.GetServerEndpoints();
+                                        if (serverEndpoints != null)
+                                        {
+                                            foreach (var serverEndpoint in serverEndpoints)
+                                            {
+                                                endpoints.Add(serverEndpoint.Key, serverEndpoint.Value);
+                                            }
+                                        }
+                                    }
+                                }
                                 break;
                             case ComMessageType.Ping:
                                 //Lookup Endpoints
@@ -414,13 +562,55 @@ namespace MauiChatApp.Core.Models
                                                 {
                                                     endpoints.Add(returnMessage.ToEntityId, pingEndpoints);
                                                 }
-                                                else
-                                                {
-                                                    //Write response to message
-                                                    returnMessage.Message = pingRequest.ToJson(false);
-                                                }
+                                                //else
+                                                //{
+                                                //    //Write response to message
+                                                //    returnMessage.Message = pingRequest.ToJson(false);
+                                                //}
                                             }
                                         }
+                                    }
+                                }
+                                break;
+
+                            case ComMessageType.SentMessage:
+                                if (IsServer)
+                                {
+                                    //Lookup endpoints
+                                    if (returnMessage.MessageAsObject is ChatMessageResponse<DisplayMessage> clientResponse)
+                                    {
+                                        if (clientResponse.IsSuccess)
+                                        {
+                                            if (chatMessage.ToMessageType > 0)
+                                            {
+                                                if (chatMessage.ToMessageType == ChatIdentity.UserType)
+                                                {
+                                                    var clientEndpoints = ChatServer.GetUserEndPoints(chatMessage.ToEntityId);
+                                                    endpoints.Add(chatMessage.ToEntityId, clientEndpoints);
+                                                }
+                                                else if (chatMessage.ToMessageType == ChatIdentity.RoomType)
+                                                {
+                                                    var clientRoomEndpoints = ChatServer.GetRoomUserEndPoints(chatMessage.ToEntityId);
+                                                    if (clientRoomEndpoints != null && clientRoomEndpoints.Count > 0)
+                                                    {
+                                                        foreach (var clientRoomEndpoint in clientRoomEndpoints)
+                                                        {
+                                                            endpoints.Add(clientRoomEndpoint.Key, clientRoomEndpoint.Value);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            if (endpoints.Count == 0)
+                                            {
+                                                //Failed no endpoints found
+                                                clientResponse.ErrorMessage = "Unable to obtain endpoint for users.";
+                                                clientResponse.IsSuccess = false;
+                                                clientResponse.Status = Enums.MessageResponseStatus.Error;
+                                                returnMessage.Message = clientResponse.ToJson();
+                                            }
+                                        }
+                                        //Add From Entity to end points;
+                                        endpoints.Add(chatMessage.FromEntityId, new List<ChatEndpoint>() { fromCEP });
                                     }
                                 }
                                 break;
@@ -435,7 +625,14 @@ namespace MauiChatApp.Core.Models
                                 //Assign message
                                 foreach (var ep in kv.Value)
                                 {
-                                    chatSocket.SendServerMessage(returnMessage, ep);
+                                    try
+                                    {
+                                        chatSocket.SendServerMessage(returnMessage, ep);
+                                    }
+                                    catch (Exception) 
+                                    {
+                                        Console.WriteLine($"Failed to message with tagId: {chatMessage.TagId}");
+                                    }
                                 }
                             }
                             catch { }

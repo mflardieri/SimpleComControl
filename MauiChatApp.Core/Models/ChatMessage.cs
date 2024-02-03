@@ -5,6 +5,7 @@ namespace MauiChatApp.Core.Models
 {
     public class ChatMessage : IComMessage
     {
+        public string TagId { get; set; }
         public ComMessageType MessageType { get; set; }
 
         public string Message { get; set; }

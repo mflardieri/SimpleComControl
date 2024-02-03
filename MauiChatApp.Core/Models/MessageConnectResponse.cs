@@ -4,6 +4,6 @@ namespace MauiChatApp.Core.Models
 {
     public class MessageConnectResponse : MessageResponse<int>
     {
-
+        public ChatIdentity RoomRef { get; set; }
     }
 }
